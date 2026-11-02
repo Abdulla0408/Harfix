@@ -10,7 +10,7 @@ from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (BufferedInputFile, InlineQuery, InlineQueryResultArticle,
-                           InputTextMessageContent, Message)
+                           InlineQueryResultsButton, InputTextMessageContent, Message)
 from yangi_alifbo import convert
 
 from .documents import UnsupportedFile, convert_file
@@ -85,7 +85,7 @@ async def caption(msg: Message):
 async def inline(q: InlineQuery):
     src = q.query.strip()
     if not src:
-        await q.answer([], switch_pm_text=T["inline_hint"], switch_pm_parameter="inline",
+        await q.answer([], button=InlineQueryResultsButton(text=T["inline_hint"], start_parameter="inline"),
                        cache_time=300, is_personal=False)
         return
     new = convert(src)[:4096]
