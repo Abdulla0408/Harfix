@@ -1,0 +1,12 @@
+[project]
+name = "yangi-alifbo"
+version = "0.1.0"
+description = "Uzbek text converter to the new alphabet (O'RQ-1184)"
+requires-python = ">=3.10"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["yangi_alifbo"]
