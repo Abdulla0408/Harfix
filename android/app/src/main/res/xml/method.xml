@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<input-method android:settingsActivity="uz.harfix.app.MainActivity" android:supportsSwitchingToNextInputMethod="true"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <subtype android:label="@string/subtype" android:imeSubtypeLocale="uz" android:imeSubtypeMode="keyboard" android:isAsciiCapable="true" android:languageTag="uz" />
+</input-method>

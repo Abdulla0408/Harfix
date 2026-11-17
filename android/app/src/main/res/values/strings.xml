@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="keyboard_name">Harfix klaviaturasi</string>
+    <string name="process_text">Harfix</string>
+    <string name="subtype">Özbekça (Harfix)</string>
+    <string name="words_name">Harfix: odatiy klaviaturada</string>
+    <string name="words_description">Gboard yoki boşqa istalgan klaviaturada yozganingizda oʻ, gʻ, sh, ch harflari yozilişi bilan ö, ğ, ş, ç ga almaşadi. Kerak bölmasa — darhol ⌫ bosing, harflar qaytadi. Faqat siz yozayotgan matn maydoni körib çiqiladi, heç narsa saqlanmaydi va yuborilmaydi. Parol, e-mail, sayt manzili maydonlari, havolalar va kirill matn tegilmaydi.</string>
+</resources>
