@@ -96,7 +96,8 @@ def download(url: str, sha256: str | None) -> pathlib.Path:
 
 def make_runtime(stage: pathlib.Path):
     runtime = stage / "runtime"
-    with zipfile.ZipFile(download(EMBED_URL, EMBED_SHA256)) as z:
+    embed = download(EMBED_URL, EMBED_SHA256)
+    with zipfile.ZipFile(embed) as z:
         z.extractall(runtime)
     pth = runtime / "python312._pth"
     if not pth.exists():
@@ -164,10 +165,19 @@ def make_pri(makepri: pathlib.Path, stage: pathlib.Path):
     shutil.copytree(stage / "Assets", root / "Assets")
     shutil.copy2(stage / "AppxManifest.xml", root / "AppxManifest.xml")
     cfg = root / "priconfig.xml"
-    subprocess.run([str(makepri), "createconfig", "/cf", str(cfg), "/dq", "uz-Latn", "/pv", "10.0.0", "/o"],
-                   check=True)
-    subprocess.run([str(makepri), "new", "/pr", str(root), "/cf", str(cfg), "/mn", str(root / "AppxManifest.xml"),
-                    "/of", str(stage / "resources.pri"), "/o"], check=True)
+    quiet([str(makepri), "createconfig", "/cf", str(cfg), "/dq", "uz-Latn", "/pv", "10.0.0", "/o"])
+    quiet([str(makepri), "new", "/pr", str(root), "/cf", str(cfg), "/mn", str(root / "AppxManifest.xml"),
+           "/of", str(stage / "resources.pri"), "/o"])
+
+
+def quiet(cmd: list[str]):
+    """Runs an SDK tool; its long per-file report is shown only if it fails."""
+    r = subprocess.run(cmd, capture_output=True)
+    if r.returncode:
+        for out in (r.stdout, r.stderr):  # makepri writes UTF-16
+            text = out.decode("utf-16-le" if out[1:2] == b"\0" else "utf-8", errors="replace")
+            print(text[-20000:])
+        sys.exit(f"{pathlib.Path(cmd[0]).name} failed ({r.returncode})")
 
 
 def find_makeappx() -> str | None:
@@ -210,13 +220,11 @@ def main():
         sys.exit("makeappx.exe not found: install the Windows SDK, or use --no-pack")
     make_pri(pathlib.Path(makeappx).with_name("makepri.exe"), stage)
     msix = OUT / f"Harfix-{version}{'-TEST' if test else ''}.msix"
-    # makeappx prints a line per file (thousands): show it only when packing fails.
-    r = subprocess.run([makeappx, "pack", "/d", str(stage), "/p", str(msix), "/o", "/h", "SHA256"],
-                       capture_output=True, text=True, errors="replace")
-    if r.returncode:
-        print(r.stdout[-20000:], r.stderr, sep="\n")
-        sys.exit(f"makeappx failed ({r.returncode})")
+    quiet([makeappx, "pack", "/d", str(stage), "/p", str(msix), "/o", "/h", "SHA256"])  # a line per file
     log(f"done: {msix} ({msix.stat().st_size / 1e6:.1f} MB)")
+    if not EMBED_SHA256:
+        embed = CACHE / EMBED_URL.rsplit("/", 1)[1]
+        log(f"python embeddable sha256 (not pinned yet): {hashlib.sha256(embed.read_bytes()).hexdigest()}")
 
 
 if __name__ == "__main__":
