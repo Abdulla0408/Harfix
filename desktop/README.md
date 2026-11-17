@@ -42,6 +42,8 @@ py -3.12 -m venv .venv
 .venv\Scripts\python -m harfix_desktop
 ```
 
+Konsol oynasisiz: `.venv\Scripts\pythonw harfix.pyw` («Windows bilan birga ishga tushish» ham manbadan shu faylni ishlatadi).
+
 `--tray` — soat yonida yashirin ishga tushadi.
 
 ## Tuzilishi
