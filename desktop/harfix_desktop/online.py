@@ -69,9 +69,10 @@ def _request(url, body=None, key=None):
 
 
 class Online:
-    def __init__(self, settings, version: str, on_change=lambda: None, cache=None):
+    def __init__(self, settings, version: str, on_change=lambda: None, cache=None, store: bool = False):
         self.settings = settings
         self.version = version
+        self.store = store  # Microsoft Store version: the Store updates it, not our download page
         self.on_change = on_change
         self.cache = cache or data_dir() / "online.json"
         self.fetched_at = 0.0  # last successful load (wall clock)
@@ -155,8 +156,12 @@ class Online:
         return max(0, (dt.date.today() - first).days)
 
     def state(self) -> dict:
+        config = self.config
+        if self.store and isinstance(config, dict):
+            # No "new version: download" note: Store apps must update through the Store only.
+            config = {k: v for k, v in config.items() if k != "latest"}
         return {
-            "config": self.config,
+            "config": config,
             "fresh": time.time() - self.fetched_at < FRESH_FOR if self.fetched_at else False,
             "platform": PLATFORM,
             "version": self.version,

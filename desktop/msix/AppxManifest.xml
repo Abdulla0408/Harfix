@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Microsoft Store package of Harfix for Windows. build_msix.py fills in the $...$ values:
+     the identity from identity.json (Partner Center → Harfix → Product identity) and the
+     version from harfix_desktop/__init__.py. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap10 desktop rescap">
+
+  <Identity Name="$NAME$" Publisher="$PUBLISHER$" Version="$VERSION$" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Harfix</DisplayName>
+    <PublisherDisplayName>$PUBLISHER_DISPLAY_NAME$</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Oʻzbek matnini yangi alifboga (ö, ğ, ş, ç) oʻgiradi: yozayotganda, belgilangan matnda va fayllarda.</Description>
+  </Properties>
+
+  <Dependencies>
+    <!-- 19041 (Windows 10 2004) is the first with uap10:Parameters -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="uz-Latn" />
+  </Resources>
+
+  <Applications>
+    <!-- The official, signed pythonw.exe runs the app (as the installer's shortcut does). -->
+    <Application Id="Harfix" Executable="runtime\pythonw.exe" EntryPoint="Windows.FullTrustApplication"
+                 uap10:Parameters="-m harfix_desktop">
+      <uap:VisualElements DisplayName="Harfix"
+                          Description="Oʻzbek matnini yangi alifboga oʻgiradi"
+                          BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"
+                         Square71x71Logo="Assets\SmallTile.png"
+                         Square310x310Logo="Assets\LargeTile.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- Start with Windows, hidden next to the clock. The app switches it on at its first
+             start and follows the user's choice after that (harfix_desktop/system.py). -->
+        <desktop:Extension Category="windows.startupTask" Executable="runtime\pythonw.exe"
+                           EntryPoint="Windows.FullTrustApplication"
+                           uap10:Parameters="-m harfix_desktop --tray">
+          <desktop:StartupTask TaskId="HarfixStartup" Enabled="false" DisplayName="Harfix" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

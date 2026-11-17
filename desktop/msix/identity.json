@@ -1,0 +1,6 @@
+{
+  "_": "Copy these three values from Partner Center: Harfix (9N1B1ZZ8ML2K) → Product management → Product identity. While they are empty, build_msix.py makes a TEST package that the Store will not accept.",
+  "name": "",
+  "publisher": "",
+  "publisher_display_name": ""
+}
