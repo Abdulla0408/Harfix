@@ -39,7 +39,7 @@ CACHE = HERE / "cache"
 
 PY_VERSION = "3.12.10"  # the last 3.12 release with Windows binaries
 EMBED_URL = f"https://www.python.org/ftp/python/{PY_VERSION}/python-{PY_VERSION}-embed-amd64.zip"
-EMBED_SHA256 = None  # pinned once a first download has been checked
+EMBED_SHA256 = "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
 
 TEST_IDENTITY = {"name": "Harfix.Test", "publisher": "CN=HarfixTest", "publisher_display_name": "Harfix (test)"}
 APP_PACKAGES = [DESKTOP / "harfix_desktop", DESKTOP / "harfix_files", REPO / "core" / "yangi_alifbo"]

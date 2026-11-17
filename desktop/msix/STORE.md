@@ -27,6 +27,11 @@ paketni yig‘adi, ichidagi Python’ni tekshiradi (importlar, .NET/WebView2, Wo
 o‘girish), paketni Windows’ga o‘rnatib ishga tushiradi va Windows App Certification Kit’dan o‘tkazadi.
 Tayyor `.msix` → Actions → msix → oxirgi run → **Artifacts → Harfix-msix**.
 
+WACK natijasi (17.11.2026): umumiy **WARNING**, ya’ni majburiy testlar o‘tgan. «Blocked executables» faqat
+Windows S rejimi uchun: Python, lxml, MuPDF kutubxonalari ichida `cmd`, `reg` kabi so‘zlar uchragani
+uchun chiqadi va Store tekshiruviga to‘sqinlik qilmaydi. «DPIAwareness» — ogohlantirish (DPI’ni pywebview
+ishga tushganda o‘zi sozlaydi).
+
 **O‘z kompyuteringizda (Windows, Python 3.12, Windows SDK):**
 
 ```bat
