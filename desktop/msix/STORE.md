@@ -29,7 +29,7 @@ Tayyor `.msix` → Actions → msix → oxirgi run → **Artifacts → Harfix-ms
 
 WACK natijasi (17.11.2026): umumiy **WARNING**, ya’ni majburiy testlar o‘tgan. «Blocked executables» faqat
 Windows S rejimi uchun: Python, lxml, MuPDF kutubxonalari ichida `cmd`, `reg` kabi so‘zlar uchragani
-uchun chiqadi va Store tekshiruviga to‘sqinlik qilmaydi. «DPIAwareness» — ogohlantirish (DPI’ni pywebview
+uchun chiqadi; WACK uni majburiy test hisoblamaydi (shuning uchun umumiy natija FAIL emas). «DPIAwareness» — ogohlantirish (DPI’ni pywebview
 ishga tushganda o‘zi sozlaydi).
 
 **O‘z kompyuteringizda (Windows, Python 3.12, Windows SDK):**
