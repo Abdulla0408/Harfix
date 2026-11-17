@@ -8,6 +8,6 @@ oʻ → ö, gʻ → ğ, sh → ş, ch → ç. Lotin va kirill matnni qabul qilad
 | `core/` | Konvertor yadrosi va umumiy test to‘plami (`core/tests/cases.json`) |
 | `bot/` | Telegram bot: matn, Word/Excel/PowerPoint/txt, inline rejim |
 | `android/` | Android ilova va Harfix klaviaturasi ([android/README.md](android/README.md)) |
-| `desktop/` | (keyin) Windows ilova |
+| `desktop/` | Windows ilova ([desktop/README.md](desktop/README.md)) |
 
 Botni ishga tushirish: [bot/README.md](bot/README.md).

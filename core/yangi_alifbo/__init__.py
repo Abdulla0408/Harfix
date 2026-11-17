@@ -1,3 +1,5 @@
-from .converter import convert, convert_word, convert_segment, convert_runs, TUTUQ
+from .converter import (TARGETS, TUTUQ, convert, convert_runs, convert_segment, convert_to,
+                        convert_word, to_cyrillic, to_old_latin)
 
-__all__ = ["convert", "convert_word", "convert_segment", "convert_runs", "TUTUQ"]
+__all__ = ["TARGETS", "TUTUQ", "convert", "convert_runs", "convert_segment", "convert_to",
+           "convert_word", "to_cyrillic", "to_old_latin"]
