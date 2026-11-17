@@ -210,7 +210,12 @@ def main():
         sys.exit("makeappx.exe not found: install the Windows SDK, or use --no-pack")
     make_pri(pathlib.Path(makeappx).with_name("makepri.exe"), stage)
     msix = OUT / f"Harfix-{version}{'-TEST' if test else ''}.msix"
-    subprocess.run([makeappx, "pack", "/d", str(stage), "/p", str(msix), "/o", "/h", "SHA256"], check=True)
+    # makeappx prints a line per file (thousands): show it only when packing fails.
+    r = subprocess.run([makeappx, "pack", "/d", str(stage), "/p", str(msix), "/o", "/h", "SHA256"],
+                       capture_output=True, text=True, errors="replace")
+    if r.returncode:
+        print(r.stdout[-20000:], r.stderr, sep="\n")
+        sys.exit(f"makeappx failed ({r.returncode})")
     log(f"done: {msix} ({msix.stat().st_size / 1e6:.1f} MB)")
 
 
