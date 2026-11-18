@@ -183,14 +183,19 @@ object Layouts {
 
     private fun act(label: String, action: String, width: Float = 1f) = Key(label, KeyKind.ACTION, width, action = action)
 
+    /** Panels are as tall as the letters (0.82 + 4 rows), so the keyboard does not jump. */
+    private const val PANEL_HEIGHT = 4.82f
+    private const val PANEL_ROW = PANEL_HEIGHT / 4
+    private const val CLIP_ROW = (PANEL_HEIGHT - 1f) / 5
+
     /** The menu: what the keyboard can do besides typing. */
     fun menu() = Layout(
         "menu",
         listOf(
-            Row(listOf(act("🌐  Keyingi til", "lang"), act("✋  Bir qöl", "onehand"))),
-            Row(listOf(act("🎨  Mavzu", "theme"), act("✍️  Tahrirlaş", "edit"))),
-            Row(listOf(act("🔤  Ögiriş", "convert"), act("📋  Bufer", "clipboard"))),
-            Row(listOf(act("↕️  Ölçam", "resize"), act("⚙️  Sozlamalar", "settings"))),
+            Row(listOf(act("🌐  Keyingi til", "lang"), act("✋  Bir qöl", "onehand")), PANEL_ROW),
+            Row(listOf(act("🎨  Mavzu", "theme"), act("✍️  Tahrirlaş", "edit")), PANEL_ROW),
+            Row(listOf(act("🔤  Ögiriş", "convert"), act("📋  Bufer", "clipboard")), PANEL_ROW),
+            Row(listOf(act("↕️  Ölçam", "resize"), act("⚙️  Sozlamalar", "settings")), PANEL_ROW),
         ),
         "",
         false,
@@ -200,10 +205,10 @@ object Layouts {
     fun edit(selecting: Boolean) = Layout(
         "edit",
         listOf(
-            Row(listOf(act("Hammasi", "edit:all"), act("Nusxa", "edit:copy"), act("Kesiş", "edit:cut"), act("Qöyiş", "edit:paste"))),
-            Row(listOf(act("⇤", "edit:home"), act("▲", "edit:up"), act("⇥", "edit:end"))),
-            Row(listOf(act("◀", "edit:left"), act(if (selecting) "✓ Tanlaş" else "Tanlaş", "edit:select"), act("▶", "edit:right"))),
-            Row(listOf(act("ABC", "back"), act("▼", "edit:down"), Key("⌫", KeyKind.BACKSPACE))),
+            Row(listOf(act("Hammasi", "edit:all"), act("Nusxa", "edit:copy"), act("Kesiş", "edit:cut"), act("Qöyiş", "edit:paste")), PANEL_ROW),
+            Row(listOf(act("⇤", "edit:home"), act("▲", "edit:up"), act("⇥", "edit:end")), PANEL_ROW),
+            Row(listOf(act("◀", "edit:left"), act(if (selecting) "✓ Tanlaş" else "Tanlaş", "edit:select"), act("▶", "edit:right")), PANEL_ROW),
+            Row(listOf(act("ABC", "back"), act("▼", "edit:down"), Key("⌫", KeyKind.BACKSPACE)), PANEL_ROW),
         ),
         "",
         false,
@@ -213,13 +218,16 @@ object Layouts {
     fun clipboard(clips: List<String>): Layout {
         val rows = ArrayList<Row>()
         if (clips.isEmpty()) {
-            rows.add(Row(listOf(act("Bufer böş: biror matnni nusxalang", "back"))))
+            rows.add(Row(listOf(act("Bufer böş: biror matnni nusxalang", "back")), CLIP_ROW))
         } else {
             for ((i, clip) in clips.take(5).withIndex()) {
                 val oneLine = clip.replace('\n', ' ').trim()
-                rows.add(Row(listOf(act(if (oneLine.length > 38) oneLine.take(37) + "…" else oneLine, "paste:$i")), 0.8f))
+                rows.add(Row(listOf(act(if (oneLine.length > 38) oneLine.take(37) + "…" else oneLine, "paste:$i")), CLIP_ROW))
             }
         }
+        // empty space up to the letters' height
+        val used = rows.size * CLIP_ROW
+        if (used < PANEL_HEIGHT - 1f - 0.01f) rows.add(Row(listOf(Key("", KeyKind.SPACER)), PANEL_HEIGHT - 1f - used))
         rows.add(Row(listOf(act("ABC", "back"), act("Tozalaş", "clip:clear"))))
         return Layout("clipboard", rows, "", false)
     }
