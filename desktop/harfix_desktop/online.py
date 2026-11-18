@@ -9,9 +9,11 @@ loaded online within the last day. Nothing typed or converted is ever sent;
 the daily count is only {random install id, "windows", version}.
 """
 import datetime as dt
+import functools
 import json
 import logging
 import re
+import ssl
 import threading
 import time
 import urllib.request
@@ -56,6 +58,20 @@ def safe_url(url) -> bool:
     return isinstance(url, str) and len(url) <= 500 and bool(_HTTPS.match(url))
 
 
+@functools.cache
+def _tls() -> ssl.SSLContext:
+    """Certificates are checked by Windows itself (truststore). Python alone only sees the root
+    certificates already in the Windows store, and a freshly installed Windows fetches most of
+    them only when a program asks Windows to check a site; until then GitHub Pages (Let's
+    Encrypt, ISRG Root X1) fails with CERTIFICATE_VERIFY_FAILED. Without truststore: Python's check."""
+    try:
+        import truststore
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except Exception as e:  # not installed / not supported here
+        log.info("truststore: %s; using Python's certificate check", e)
+        return ssl.create_default_context()
+
+
 def _request(url, body=None, key=None):
     headers = {"User-Agent": "Harfix-Windows", "Accept": "application/json"}
     data = None
@@ -63,7 +79,7 @@ def _request(url, body=None, key=None):
         data = json.dumps(body).encode()
         headers.update({"Content-Type": "application/json", "apikey": key})
     req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data else "GET")
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+    with urllib.request.urlopen(req, timeout=TIMEOUT, context=_tls()) as r:
         raw = r.read(256 * 1024)
         return r.status, raw
 

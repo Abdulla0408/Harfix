@@ -73,6 +73,10 @@
   document.querySelectorAll("[data-t]").forEach(function (el) { el.textContent = L(el.dataset.t); });
   $("src").placeholder = L("Matnni shu yerga yozing yoki qoʻying (lotin yoki kirill)…");
 
+  // The privacy policy (PRIVACY.md in the Harfix repository), for the Microsoft Store listing too.
+  var PRIVACY_URL = "https://github.com/Abdulla0408/Harfix/blob/main/PRIVACY.md";
+  $("privacy").addEventListener("click", function () { call("open_url", PRIVACY_URL); });
+
   // --- navigation ----------------------------------------------------------------------
   function showTab(name) {
     document.querySelectorAll(".nav-item").forEach(function (b) { b.classList.toggle("active", b.dataset.tab === name); });

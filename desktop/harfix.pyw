@@ -1,11 +1,16 @@
-"""Starts Harfix from the source folder without a console window (pythonw harfix.pyw).
-"Start with Windows" points here when Harfix runs from source (system.launch_command)."""
+"""Runs Harfix from the source folder without a console window: pythonw harfix.pyw [--tray]
+
+"Start with Windows" uses this file when Harfix runs from source (system.launch_command);
+the installed app runs `pythonw -m harfix_desktop` instead.
+"""
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-sys.path.insert(1, str(pathlib.Path(__file__).resolve().parent.parent / "core"))
+if __name__ == "__main__":  # the typing engine's process imports this file again (multiprocessing spawn)
+    here = pathlib.Path(__file__).resolve().parent
+    sys.path.insert(0, str(here))
+    sys.path.insert(1, str(here.parent / "core"))
 
-from harfix_desktop.app import main  # noqa: E402
+    from harfix_desktop.app import main
 
-sys.exit(main())
+    sys.exit(main())

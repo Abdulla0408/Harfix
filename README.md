@@ -11,3 +11,5 @@ oʻ → ö, gʻ → ğ, sh → ş, ch → ç. Lotin va kirill matnni qabul qilad
 | `desktop/` | Windows ilova ([desktop/README.md](desktop/README.md)) |
 
 Botni ishga tushirish: [bot/README.md](bot/README.md).
+
+Ilovalarning maxfiylik siyosati: [PRIVACY.md](PRIVACY.md) (Google Play va Microsoft Store uchun shu havola).

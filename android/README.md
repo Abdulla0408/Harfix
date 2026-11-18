@@ -10,7 +10,7 @@ Bu loyiha 17.11.2026 da saytdagi `Harfix.apk` 1.4.0 dan
 
 | Qism | Holati |
 |---|---|
-| `assets/ui/` (ilova interfeysi) | APK’dan **aynan o‘zi**, baytma-bayt bir xil |
+| `assets/ui/` (ilova interfeysi) | APK’dan **aynan o‘zi**; keyin faqat «Maxfiylik» kartasiga reklama haqidagi gap va «Maxfiylik siyosati» havolasi qo‘shildi |
 | Ikonkalar, mavzular, `method.xml`, `accessibility.xml` | APK’dan **aynan o‘zi** |
 | `AndroidManifest.xml` | Yig‘ilgan manifest asl APK’niki bilan bir xil |
 | Kotlin kodi | APK ichidagi kod o‘qib chiqilib, **qaytadan toza yozildi**: xatti-harakati bir xil, lekin satrma-satr asl manba emas |
@@ -50,6 +50,10 @@ storePassword=...
 keyAlias=...
 keyPassword=...
 ```
+
+Bu fayl bo‘lmasa, `assembleRelease` / `bundleRelease` darhol xato bilan to‘xtaydi (aks holda
+Google Play qabul qilmaydigan imzosiz fayl chiqardi). Android Studio’dagi «Generate Signed Bundle / APK»
+o‘z kalitini beradi, u faylsiz ham ishlaydi.
 
 Eski imzo kaliti yo‘qolgan bo‘lsa, yangi kalit yarating (`keytool -genkeypair -v -keystore harfix.jks -keyalg RSA -keysize 2048 -validity 10000 -alias harfix`)
 va **uni kamida ikki joyda saqlang** (masalan, parol menejeri va flesh). Yangi kalit bilan imzolangan APK
