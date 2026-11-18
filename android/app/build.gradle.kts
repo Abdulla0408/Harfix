@@ -50,14 +50,19 @@ android {
     }
 
     buildTypes {
-        // The test build installs next to the real app (its own id and name).
+        // The test build installs next to the real app, with its own id and names, so its
+        // keyboard and service are not mistaken for the real app's in Android's lists.
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             resValue("string", "app_name", "Harfix (test)")
+            resValue("string", "keyboard_name", "Harfix klaviaturasi (test)")
+            resValue("string", "words_name", "Harfix (test): odatiy klaviaturada")
         }
         release {
             resValue("string", "app_name", "Harfix")
+            resValue("string", "keyboard_name", "Harfix klaviaturasi")
+            resValue("string", "words_name", "Harfix: odatiy klaviaturada")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
