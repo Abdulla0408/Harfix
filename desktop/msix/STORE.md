@@ -6,7 +6,8 @@ Store versiyasining afzalligi: paketni Microsoft o‘zi imzolaydi, shuning uchun
 va Smart App Control («An Application Control policy has blocked this file») ogohlantirishlari chiqmaydi,
 yangilanishlar Store orqali o‘zi keladi.
 
-**Holati (18.11.2026):** 1.2.1.0 sertifikatsiyaga qayta yuborilgan. Birinchi yuborish 13.11 da
+**Holati:** 1.2.1.0 18.11.2026 da Store’da chiqdi (<https://apps.microsoft.com/detail/9N1B1ZZ8ML2K>);
+1.2.2.0 yangilanish sifatida yuborilgan. Birinchi yuborish 13.11 da
 rad etilgan edi (10.1.1.3 Inaccurate Representation): skrinshotlar ilovadan to‘g‘ridan-to‘g‘ri olinmagan,
 ya’ni interfeys brauzerda chizilgan edi. Endi [`store/`](store) dagi rasmlar o‘rnatilgan Harfix’ning
 haqiqiy oynasidan olingan (pastda, «Skrinshotlar»).
@@ -43,7 +44,7 @@ ishga tushganda o‘zi sozlaydi).
 py -3.12 desktop\msix\build_msix.py
 ```
 
-Natija: `desktop\msix\out\Harfix-1.2.1.0.msix`. Versiya `harfix_desktop/__init__.py` dagi `VERSION` dan
+Natija: `desktop\msix\out\Harfix-1.2.2.0.msix`. Versiya `harfix_desktop/__init__.py` dagi `VERSION` dan
 olinadi. Har yangi yuborishda versiyani oshiring: Store bir xil yoki eski versiyani qabul qilmaydi.
 
 ## 3. Partner Center’da yuborish
@@ -55,7 +56,7 @@ Harfix → **Start your submission** (yoki **Update**):
    Website: `https://harfix.uz/`. Support contact: `https://t.me/` dagi bot havolasi yoki e-mail.
    System requirements: Windows 10 2004+ (x64), Microsoft Edge WebView2 Runtime.
 3. **Age ratings** — IARC so‘rovnomasi: «Utility, productivity…» turi, hamma savolga *No* → 3+.
-4. **Packages** — `Harfix-1.2.1.0.msix` ni tashlang. «Windows 10/11 Desktop» belgilangan bo‘lsin.
+4. **Packages** — `Harfix-<versiya>.msix` ni tashlang. «Windows 10/11 Desktop» belgilangan bo‘lsin.
 5. **Store listings** — til: **Uzbek (Latin)** (paket shu tilda: `uz-Latn`). Matnlar pastda, rasmlar
    [`store/`](store) papkasida (1707×960, ilova oynasining o‘zi).
 6. **Submission options** — *Restricted capabilities* va *Notes for certification* ga pastdagi
@@ -161,7 +162,7 @@ Birinchi yuborish qo‘lda qilinadi. Keyingilarini GitHub’dan bir tugma bilan 
 | Xabar | Sabab va yechim |
 |---|---|
 | Package identity / publisher doesn’t match | `identity.json` bo‘sh yoki xato — 1-bo‘lim |
-| Version must be higher | `VERSION` ni oshiring (1.2.1 → 1.2.2) |
+| Version must be higher | `VERSION` ni oshiring (masalan 1.2.2 → 1.2.3) |
 | Listing language not in package | Store listing **Uzbek (Latin)** bo‘lsin |
 | Restricted capability runFullTrust | 5-bo‘limdagi izohni yozing |
 | 10.1.1.3 Inaccurate Representation (Screenshots) | Rasmlar ilovaning o‘zidan olinmagan — `capture_screenshots.py` bilan qayta oling |

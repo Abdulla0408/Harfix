@@ -1,6 +1,6 @@
 """Builds the Microsoft Store package (MSIX) of Harfix for Windows.
 
-    py -3.12 desktop\\msix\\build_msix.py        ->  desktop\\msix\\out\\Harfix-1.2.1.0.msix
+    py -3.12 desktop\\msix\\build_msix.py        ->  desktop\\msix\\out\\Harfix-1.2.2.0.msix
 
 The package holds the same layout as the installer (harfix_desktop/paths.py):
 
