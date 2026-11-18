@@ -1,6 +1,6 @@
 # Harfix — Windows ilova
 
-Versiya **1.2.1**. Python 3.12, oynasi pywebview (WebView2) orqali ko‘rsatiladigan veb-sahifa (`harfix_desktop/ui`).
+Versiya **1.2.2** (Microsoft Store). Python 3.12, oynasi pywebview (WebView2) orqali ko‘rsatiladigan veb-sahifa (`harfix_desktop/ui`).
 
 ## Bu kod qayerdan keldi
 
