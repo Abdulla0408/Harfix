@@ -541,6 +541,7 @@ class KeyboardView(context: Context) : View(context) {
             KeyKind.ENTER -> drawEnter(c, cx, cy, s, color)
             KeyKind.SPACE -> text(c, spaceLabel, cx, cy, textSize(k, r), t.hint, false)
             KeyKind.GLOBE -> drawGlobe(c, cx, cy, s * 0.9f, color)
+            KeyKind.NUMPAD -> drawNumpad(c, cx, cy, s, color)
             KeyKind.ACTION -> {
                 label.textSize = 15 * sp
                 val room = r.width() - 16 * density
@@ -718,6 +719,16 @@ class KeyboardView(context: Context) : View(context) {
                 c.drawLine(x, cy, cx + 0.3f * s, cy + 0.5f * s, stroke)
             }
         }
+    }
+
+    /** A keypad: three rows of three dots and one under the middle. */
+    private fun drawNumpad(c: Canvas, cx: Float, cy: Float, s: Float, color: Int) {
+        fill.color = color
+        val step = s * 0.48f
+        val dot = s * 0.13f
+        val top = cy - step * 1.5f
+        for (row in 0..2) for (col in -1..1) c.drawCircle(cx + col * step, top + row * step, dot, fill)
+        c.drawCircle(cx, top + 3 * step, dot, fill)
     }
 
     private fun drawGlobe(c: Canvas, cx: Float, cy: Float, s: Float, color: Int) {

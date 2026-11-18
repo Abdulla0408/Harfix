@@ -331,6 +331,8 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
                 } else {
                     ic.performEditorAction(action)
                 }
+                // a new line starts a sentence: capital letter, as after ". "
+                updateAutoCaps()
             }
             KeyKind.SPACE -> {
                 undo.pending = null
@@ -342,6 +344,7 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
             }
             KeyKind.SYMBOLS -> show(Layouts.symbols(letters, globe))
             KeyKind.MORE_SYMBOLS -> show(Layouts.more(letters, globe))
+            KeyKind.NUMPAD -> show(Layouts.numpad())
             KeyKind.LETTERS -> show(letters)
             KeyKind.LANG -> {
                 val next = languages[(languages.indexOf(letters.name) + 1) % languages.size]

@@ -1,6 +1,6 @@
 package uz.harfix.app.keyboard
 
-enum class KeyKind { CHAR, NEW_LETTER, SHIFT, BACKSPACE, ENTER, SPACE, SYMBOLS, MORE_SYMBOLS, LETTERS, LANG, GLOBE, SPACER, ACTION }
+enum class KeyKind { CHAR, NEW_LETTER, SHIFT, BACKSPACE, ENTER, SPACE, SYMBOLS, MORE_SYMBOLS, LETTERS, LANG, GLOBE, SPACER, ACTION, NUMPAD }
 
 enum class Shift { OFF, ON, LOCKED }
 
@@ -59,9 +59,12 @@ object Layouts {
     /** The top strip of big letter keys (ö ğ ş ç for Latin). */
     private fun strip(letters: List<String>) = Row(letters.map { Key(it, KeyKind.NEW_LETTER, 2.5f) }, 0.82f)
 
-    /** ⇧ + letters + ⌫ */
+    /** A small gap: keeps a finger aiming at M (or Z) off ⌫ (or ⇧). */
+    private val GAP = Key("", KeyKind.SPACER, 0.25f)
+
+    /** ⇧ + letters + ⌫, with a gap on both sides so the letters keep their full width. */
     private fun shiftRow(line: String, alts: Map<String, List<String>>) =
-        Row(listOf(Key("⇧", KeyKind.SHIFT, 1.5f)) + keys(line, alts) + Key("⌫", KeyKind.BACKSPACE, 1.5f))
+        Row(listOf(Key("⇧", KeyKind.SHIFT, 1.25f), GAP) + keys(line, alts) + GAP + Key("⌫", KeyKind.BACKSPACE, 1.25f))
 
     /** ?123 , [🌐] [next language] space . ⏎ */
     fun bottomRow(next: String?, globe: Boolean): Row {
@@ -123,13 +126,14 @@ object Layouts {
         else -> latin(next, globe)
     }
 
-    /** ABC , [🌐] space . ⏎ (space is wider without the globe key) */
+    /** ABC , [🌐] number pad, space . ⏎ (space is wider without the globe key) */
     private fun symbolsBottom(left: String, right: String, globe: Boolean): Row {
         val k = ArrayList<Key>()
         k.add(Key("ABC", KeyKind.LETTERS, 1.5f))
         k.add(Key(left))
         if (globe) k.add(Key("🌐", KeyKind.GLOBE))
-        k.add(Key(" ", KeyKind.SPACE, if (globe) 4.5f else 5.5f))
+        k.add(Key("", KeyKind.NUMPAD))
+        k.add(Key(" ", KeyKind.SPACE, if (globe) 3.5f else 4.5f))
         k.add(Key(right))
         k.add(Key("⏎", KeyKind.ENTER, 1.5f))
         return Row(k)
@@ -158,6 +162,19 @@ object Layouts {
             Row(keys("€ $ £ ¥ ^ ° = { } \\")),
             Row(listOf(Key("?123", KeyKind.SYMBOLS, 1.5f)) + keys("© ® ™ ; < > _") + Key("⌫", KeyKind.BACKSPACE, 1.5f)),
             symbolsBottom("[", "]", globe),
+        ),
+        "",
+        false,
+    )
+
+    /** The number pad from ?123: big digits, arithmetic on the left; ?123 goes back. */
+    fun numpad() = Layout(
+        "numpad",
+        listOf(
+            Row(listOf(Key("+", alts = listOf("±")), Key("1", width = 1.3f), Key("2", width = 1.3f), Key("3", width = 1.3f), Key("%", alts = listOf("‰")))),
+            Row(listOf(Key("-", alts = listOf("=", "_")), Key("4", width = 1.3f), Key("5", width = 1.3f), Key("6", width = 1.3f), Key("⌫", KeyKind.BACKSPACE))),
+            Row(listOf(Key("*", alts = listOf("/", "×", "÷")), Key("7", width = 1.3f), Key("8", width = 1.3f), Key("9", width = 1.3f), Key(" ", KeyKind.SPACE))),
+            Row(listOf(Key("?123", KeyKind.SYMBOLS), Key(",", width = 1.3f), Key("0", width = 1.3f), Key(".", width = 1.3f), Key("⏎", KeyKind.ENTER))),
         ),
         "",
         false,
