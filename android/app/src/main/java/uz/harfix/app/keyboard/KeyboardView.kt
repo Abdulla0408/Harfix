@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.Shader
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.RenderNode
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Handler
@@ -126,6 +127,9 @@ class KeyboardView(context: Context) : View(context) {
     /** The background gradient is made once per size and theme, not on every frame. */
     private var bgKey: Pair<Int, KeyboardTheme>? = null
     private val pressedRect = RectF()
+    /** The keys at rest, recorded once (API 29+); [baseDirty] when they must be recorded again. */
+    private var baseNode: Any? = null // a RenderNode; typed loosely so API 26-28 never loads the class
+    private var baseDirty = true
 
     private fun isDark() =
         resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
@@ -141,6 +145,7 @@ class KeyboardView(context: Context) : View(context) {
 
     fun setLayout(l: Layout) {
         layout = l
+        baseDirty = true
         cancelAll()
         requestLayout()
         computeKeys()
@@ -148,11 +153,13 @@ class KeyboardView(context: Context) : View(context) {
     }
 
     fun setShift(s: Shift) {
+        if (s != shift) baseDirty = true
         shift = s
         invalidate()
     }
 
     fun setEnterIcon(icon: EnterIcon) {
+        if (icon != enterIcon) baseDirty = true
         enterIcon = icon
         invalidate()
     }
@@ -162,6 +169,7 @@ class KeyboardView(context: Context) : View(context) {
     }
 
     fun setSpaceLabel(text: String) {
+        if (text != spaceLabel) baseDirty = true
         spaceLabel = text
         invalidate()
     }
@@ -170,6 +178,7 @@ class KeyboardView(context: Context) : View(context) {
     fun setStrip(on: Boolean) {
         if (on == strip) return
         strip = on
+        baseDirty = true
         if (!on) suggestions = emptyList()
         requestLayout()
         computeKeys()
@@ -269,7 +278,10 @@ class KeyboardView(context: Context) : View(context) {
         setMeasuredDimension(w, (padTop + stripHeight + rows + padBottom).toInt())
     }
 
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = computeKeys()
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        baseDirty = true
+        computeKeys()
+    }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
         val bottom = if (Build.VERSION.SDK_INT >= 30) {
@@ -288,6 +300,7 @@ class KeyboardView(context: Context) : View(context) {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         theme = KeyboardTheme(isDark())
+        baseDirty = true
         requestLayout()
     }
 
@@ -371,57 +384,92 @@ class KeyboardView(context: Context) : View(context) {
         }
     }
 
+    /** One key: its glass and its label; [down] while a finger is on it. */
+    private fun drawKey(c: Canvas, k: Key, rect: RectF, down: Boolean) {
+        val t = theme
+        val radius = 9 * density
+        val (normal, pressedColor) = when (k.kind) {
+            KeyKind.CHAR, KeyKind.SPACE -> t.key to t.keyPressed
+            KeyKind.NEW_LETTER -> t.newLetter to t.newLetterPressed
+            KeyKind.ENTER -> KeyboardTheme.ACCENT to KeyboardTheme.ACCENT_PRESSED
+            else -> t.func to t.funcPressed
+        }
+        // a pressed key gives a little, like a soft glass button
+        val r = if (down) {
+            val dx = rect.width() * 0.04f
+            val dy = rect.height() * 0.05f
+            pressedRect.set(rect.left + dx, rect.top + dy, rect.right - dx, rect.bottom - dy)
+            pressedRect
+        } else {
+            rect
+        }
+        glass(c, r, radius, if (down) pressedColor else normal, !down)
+
+        val color = if (k.kind == KeyKind.ENTER) 0xFFFFFFFF.toInt() else t.text
+        val s = minOf(r.width(), r.height()) * 0.42f
+        val cx = r.centerX()
+        val cy = r.centerY()
+        when (k.kind) {
+            KeyKind.CHAR, KeyKind.NEW_LETTER -> {
+                text(c, shiftText(k.label), cx, cy, textSize(k, r), color, k.kind == KeyKind.NEW_LETTER)
+                val hint = k.alts.firstOrNull()
+                if (k.kind == KeyKind.CHAR && hint != null && hint.isNotEmpty() && hint[0].isDigit()) {
+                    text(c, hint, r.right - radius, r.top + 9 * density, 10 * sp, t.hint, false)
+                }
+            }
+            KeyKind.SHIFT -> drawShift(c, cx, cy, s, color)
+            KeyKind.BACKSPACE -> drawBackspace(c, cx, cy, s, color)
+            KeyKind.ENTER -> drawEnter(c, cx, cy, s, color)
+            KeyKind.SPACE -> text(c, spaceLabel, cx, cy, textSize(k, r), t.hint, false)
+            KeyKind.GLOBE -> drawGlobe(c, cx, cy, s * 0.9f, color)
+            else -> text(c, k.label, cx, cy, textSize(k, r), color, false)
+        }
+    }
+
+    /** The background and every key at rest: the part that changes only with the layout. */
+    private fun drawBase(c: Canvas) {
+        c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
+        for ((k, rect) in keys) drawKey(c, k, rect, false)
+    }
+
     override fun onDraw(c: Canvas) {
         val t = theme
         if (bgKey?.first != height || bgKey?.second !== t) {
             bgPaint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), t.backgroundTop, t.backgroundBottom, Shader.TileMode.CLAMP)
             bgKey = height to t
+            baseDirty = true
         }
-        c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
         if (keys.isEmpty()) computeKeys()
-        if (strip) drawStrip(c)
-        val pressed = touches.values.map { it.key }.toSet()
-        val radius = 9 * density
 
-        for ((k, rect) in keys) {
-            val (normal, down) = when (k.kind) {
-                KeyKind.CHAR, KeyKind.SPACE -> t.key to t.keyPressed
-                KeyKind.NEW_LETTER -> t.newLetter to t.newLetterPressed
-                KeyKind.ENTER -> KeyboardTheme.ACCENT to KeyboardTheme.ACCENT_PRESSED
-                else -> t.func to t.funcPressed
-            }
-            val isDown = k in pressed && !gliding
-            // a pressed key gives a little, like a soft glass button
-            val r = if (isDown) {
-                val dx = rect.width() * 0.04f
-                val dy = rect.height() * 0.05f
-                pressedRect.set(rect.left + dx, rect.top + dy, rect.right - dx, rect.bottom - dy)
-                pressedRect
-            } else {
-                rect
-            }
-            glass(c, r, radius, if (isDown) down else normal, !isDown)
-
-            val color = if (k.kind == KeyKind.ENTER) 0xFFFFFFFF.toInt() else t.text
-            val s = minOf(r.width(), r.height()) * 0.42f
-            val cx = r.centerX()
-            val cy = r.centerY()
-            when (k.kind) {
-                KeyKind.CHAR, KeyKind.NEW_LETTER -> {
-                    text(c, shiftText(k.label), cx, cy, textSize(k, r), color, k.kind == KeyKind.NEW_LETTER)
-                    val hint = k.alts.firstOrNull()
-                    if (k.kind == KeyKind.CHAR && hint != null && hint.isNotEmpty() && hint[0].isDigit()) {
-                        text(c, hint, r.right - radius, r.top + 9 * density, 10 * sp, t.hint, false)
-                    }
+        // The keys at rest are recorded once and replayed by the GPU on every frame; a key press
+        // only draws that key again. Without hardware drawing (tests) everything is drawn.
+        if (Build.VERSION.SDK_INT >= 29 && c.isHardwareAccelerated) {
+            val node = baseNode as RenderNode? ?: RenderNode("harfix-keys").also { baseNode = it }
+            if (baseDirty || node.width != width || node.height != height) {
+                node.setPosition(0, 0, width, height)
+                val rc = node.beginRecording(width, height)
+                try {
+                    drawBase(rc)
+                } finally {
+                    node.endRecording()
                 }
-                KeyKind.SHIFT -> drawShift(c, cx, cy, s, color)
-                KeyKind.BACKSPACE -> drawBackspace(c, cx, cy, s, color)
-                KeyKind.ENTER -> drawEnter(c, cx, cy, s, color)
-                KeyKind.SPACE -> text(c, spaceLabel, cx, cy, textSize(k, r), t.hint, false)
-                KeyKind.GLOBE -> drawGlobe(c, cx, cy, s * 0.9f, color)
-                else -> text(c, k.label, cx, cy, textSize(k, r), color, false)
+                baseDirty = false
+            }
+            c.drawRenderNode(node)
+        } else {
+            drawBase(c)
+        }
+
+        if (!gliding) {
+            val pad = 3 * density
+            for (touch in touches.values) {
+                val r = touch.rect
+                // cover the key at rest (and its shadow), then draw it pressed
+                c.drawRect(r.left - pad, r.top - pad, r.right + pad, r.bottom + pad, bgPaint)
+                drawKey(c, touch.key, r, true)
             }
         }
+        if (strip) drawStrip(c)
 
         if (showPreview) {
             for (touch in touches.values) {
