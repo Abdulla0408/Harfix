@@ -39,6 +39,14 @@ android {
     }
 
     signingConfigs {
+        // Test builds are signed with this fixed key (not secret, like Android's own debug key),
+        // so a newer test APK from CI installs over the previous one instead of being refused.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (signing.getProperty("storeFile") != null) {
             create("release") {
                 storeFile = file(signing.getProperty("storeFile"))

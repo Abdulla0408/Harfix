@@ -12,7 +12,11 @@ import java.nio.file.Files
 class SuggestTest {
     companion object {
         /** The real dictionary from assets (the tests run in android/app). */
-        val dict: Dictionary by lazy { File("src/main/assets/dict/uz.txt").inputStream().use { Dictionary.load(it) } }
+        val dict: Dictionary by lazy {
+            File("src/main/assets/dict/uz.txt").inputStream().use { main ->
+                File("src/main/assets/dict/uz-extra.txt").inputStream().use { extra -> Dictionary.load(main, extra) }
+            }
+        }
     }
 
     @Test
@@ -33,6 +37,7 @@ class SuggestTest {
         assertEquals(1f, Typing.distance("bilan", "bilaq", 2f))
         assertEquals(0.6f, Typing.distance("bilna", "bilan", 2f)) // swapped letters
         assertTrue(Typing.near('s').containsAll(listOf('ş', 'a', 'd')))
+        assertTrue(Typing.twins('s').containsAll(listOf('s', 'ş')))
     }
 
     @Test
@@ -43,6 +48,33 @@ class SuggestTest {
         assertEquals("qişloq", Suggest.forWord(dict, null, "qisloq").autocorrect)
         assertEquals("Yaxşi", Suggest.forWord(dict, null, "Yaxsi").autocorrect)
         assertEquals("UÇUN", Suggest.forWord(dict, null, "UCUN").autocorrect)
+        assertEquals("maktab", Suggest.forWord(dict, null, "maktap").autocorrect) // missing voicing
+        assertEquals("odamlar", Suggest.forWord(dict, null, "odamalr").autocorrect) // swapped letters
+        assertEquals("muhabbat", Suggest.forWord(dict, null, "muhabat").autocorrect) // missing letter
+        assertEquals("bilan", Suggest.forWord(dict, null, "bilna").autocorrect)
+        assertEquals("kitob", Suggest.forWord(dict, null, "kitab").autocorrect) // only a town is called Kitab
+        assertEquals("Özbekiston", Suggest.forWord(dict, null, "ozbekiston").autocorrect) // names when very close
+        assertEquals("Toşkent", Suggest.forWord(dict, null, "toskent").autocorrect)
+    }
+
+    @Test
+    fun everydayWordsAndEndingsAreNotChanged() {
+        // not in Wikipedia, but real: everyday words and verb forms
+        for (w in listOf("sen", "salom", "rahmat", "yöq", "qalaysiz", "keçirasiz", "ketyapman", "tuşundim",
+            "kelyapman", "yozyapman", "telefonim", "toşkentda", "bormaymiz")) {
+            assertNull(w, Suggest.forWord(dict, null, w).autocorrect)
+        }
+    }
+
+    @Test
+    fun fastEnoughForTyping() {
+        val words = listOf("ucun", "maktap", "odamalr", "ketyapman", "bilna", "kitoblr", "assalomu", "qişloq",
+            "a", "bi", "bil", "bila", "toşke", "özbekistonda", "yozayotgan", "qanaqa")
+        Suggest.forWord(dict, null, "warmup")
+        val start = System.nanoTime()
+        repeat(10) { for (w in words) Suggest.forWord(dict, null, w) }
+        val perWord = (System.nanoTime() - start) / 1e6 / (10 * words.size)
+        assertTrue("${perWord}ms per word", perWord < 15.0)
     }
 
     @Test
@@ -53,8 +85,8 @@ class SuggestTest {
         assertNull(Suggest.forWord(dict, null, "xyzqw").autocorrect) // nothing close
         assertNull(Suggest.forWord(dict, null, "a").autocorrect) // too short to judge
         assertEquals(Suggest.EMPTY, Suggest.forWord(dict, null, "abc123"))
-        // a lower-case word is not turned into a name
-        assertNull(Suggest.forWord(dict, null, "toşkemt").autocorrect)
+        // a lower-case word is not turned into a name unless it is very close
+        assertNull(Suggest.forWord(dict, null, "sen").autocorrect)
     }
 
     @Test
