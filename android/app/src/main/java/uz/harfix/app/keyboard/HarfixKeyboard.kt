@@ -67,6 +67,8 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     private val workerHandler = Handler(worker.looper)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var requestId = 0
+    /** Suggestions follow a key press a moment later, after its frame is drawn. */
+    private val refreshLater = Runnable { refreshSuggestions() }
 
     override fun onCreate() {
         super.onCreate()
@@ -198,7 +200,8 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int, candidatesStart: Int, candidatesEnd: Int) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         noSelection = newSelStart == newSelEnd
-        refreshSuggestions()
+        mainHandler.removeCallbacks(refreshLater)
+        mainHandler.postDelayed(refreshLater, 30)
         // typing moves the cursor by a character or two; anything else ends the undo chance
         if (noSelection && abs(newSelStart - oldSelStart) <= 2) return
         undo.pending = null
