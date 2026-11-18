@@ -123,6 +123,9 @@ class KeyboardView(context: Context) : View(context) {
     /** Width of a letter key, measured in [computeKeys]. */
     private var letterWidth = 0f
     private val bgPaint = Paint()
+    /** The background gradient is made once per size and theme, not on every frame. */
+    private var bgKey: Pair<Int, KeyboardTheme>? = null
+    private val pressedRect = RectF()
 
     private fun isDark() =
         resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
@@ -370,7 +373,10 @@ class KeyboardView(context: Context) : View(context) {
 
     override fun onDraw(c: Canvas) {
         val t = theme
-        bgPaint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), t.backgroundTop, t.backgroundBottom, Shader.TileMode.CLAMP)
+        if (bgKey?.first != height || bgKey?.second !== t) {
+            bgPaint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), t.backgroundTop, t.backgroundBottom, Shader.TileMode.CLAMP)
+            bgKey = height to t
+        }
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
         if (keys.isEmpty()) computeKeys()
         if (strip) drawStrip(c)
@@ -389,7 +395,8 @@ class KeyboardView(context: Context) : View(context) {
             val r = if (isDown) {
                 val dx = rect.width() * 0.04f
                 val dy = rect.height() * 0.05f
-                RectF(rect.left + dx, rect.top + dy, rect.right - dx, rect.bottom - dy)
+                pressedRect.set(rect.left + dx, rect.top + dy, rect.right - dx, rect.bottom - dy)
+                pressedRect
             } else {
                 rect
             }

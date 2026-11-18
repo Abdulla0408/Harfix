@@ -5,6 +5,9 @@ import android.content.SharedPreferences
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Looper
 import android.os.SystemClock
 import android.text.InputType
 import android.view.HapticFeedbackConstants
@@ -57,18 +60,40 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     private var autoUndo: Pair<String, String>? = null
     /** Words the last glide found: the first was typed, the rest stay in the strip. */
     private var glided: List<String>? = null
-    private var suggestion = Suggest.EMPTY
+    /** The last suggestions and the word they are for (main thread only). */
+    private var cached: Pair<String, Suggest.Result>? = null
+    /** Dictionary work runs here, never on the main thread, so typing stays smooth. */
+    private val worker = HandlerThread("harfix-suggest").apply { start() }
+    private val workerHandler = Handler(worker.looper)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var requestId = 0
 
     override fun onCreate() {
         super.onCreate()
         user = UserWords(File(filesDir, UserWords.FILE))
-        user.load()
-        Thread({
+        workerHandler.post {
+            user.load()
             try {
-                dict = assets.open("dict/uz.txt").use { Dictionary.load(it) }
+                dict = assets.open("dict/uz.txt").use { main ->
+                    assets.open("dict/uz-extra.txt").use { extra -> Dictionary.load(main, extra) }
+                }
             } catch (_: Exception) {
             }
-        }, "harfix-dictionary").start()
+            mainHandler.post { refreshSuggestions() }
+        }
+    }
+
+    override fun onDestroy() {
+        worker.quitSafely()
+        super.onDestroy()
+    }
+
+    /** Suggestions for [word]: from the cache, or worked out now (only when a word ends). */
+    private fun resultFor(d: Dictionary, word: String): Suggest.Result {
+        cached?.let { (w, r) -> if (w == word) return r }
+        val r = Suggest.forWord(d, if (learn) user else null, word)
+        cached = word to r
+        return r
     }
 
     @Suppress("DEPRECATION")
@@ -121,6 +146,7 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         stripAllowed = liveField && live && (autocorrect || glide)
         autoUndo = null
         glided = null
+        cached = null
         noSelection = info.initialSelStart == info.initialSelEnd
 
         languages = buildList {
@@ -347,8 +373,29 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
             v.setSuggestions(g.take(3))
             return
         }
-        suggestion = if (word.isEmpty()) Suggest.EMPTY else Suggest.forWord(d, if (learn) user else null, word)
-        v.setSuggestions(suggestion.words)
+        if (word.isEmpty()) {
+            requestId++
+            v.setSuggestions(emptyList())
+            return
+        }
+        cached?.let { (w, r) ->
+            if (w == word) {
+                v.setSuggestions(r.words)
+                return
+            }
+        }
+        // only the newest word matters: older requests are dropped
+        val id = ++requestId
+        val u = if (learn) user else null
+        workerHandler.removeCallbacksAndMessages(SUGGEST)
+        workerHandler.postAtTime({
+            val r = Suggest.forWord(d, u, word)
+            mainHandler.post {
+                if (id != requestId) return@post
+                cached = word to r
+                view?.setSuggestions(r.words)
+            }
+        }, SUGGEST, SystemClock.uptimeMillis())
     }
 
     /** Space, punctuation and the like end a word; apostrophes and hyphens are inside words. */
@@ -365,7 +412,7 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         val d = dict ?: return false
         val word = Suggest.wordBefore(ic.getTextBeforeCursor(40, 0) ?: return false)
         if (word.length < 2) return false
-        val fix = if (autocorrect) Suggest.forWord(d, if (learn) user else null, word).autocorrect else null
+        val fix = if (autocorrect) resultFor(d, word).autocorrect else null
         if (fix != null && fix != word) {
             ic.beginBatchEdit()
             ic.deleteSurroundingText(word.length, 0)
@@ -388,6 +435,7 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         ic.commitText(typed, 1)
         ic.endBatchEdit()
         if (learn) user.learn(typed, 2)
+        cached = null
         return true
     }
 
@@ -402,30 +450,38 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         autoUndo = null
         glided = null
         if (learn && dict?.lookup(text) == null) user.learn(text, 2)
+        cached = null
         if (shift == Shift.ON) setShift(Shift.OFF)
         updateAutoCaps()
     }
 
     override fun onGlide(path: List<Glide.P>, centers: Map<Char, Glide.P>, keyWidth: Float) {
         val d = dict ?: return
-        val ic = currentInputConnection ?: return
-        val found = Glide.decode(path, centers, keyWidth, d)
-        if (found.isEmpty()) return
-        val words = found.map {
-            when (shift) {
-                Shift.LOCKED -> it.word.uppercase(Locale.ROOT)
-                Shift.ON -> it.word.replaceFirstChar { ch -> ch.uppercaseChar() }
-                Shift.OFF -> it.word
+        val caseNow = shift
+        val id = ++requestId
+        // the search runs on the worker; the word is typed when it is ready
+        workerHandler.post {
+            val found = Glide.decode(path, centers, keyWidth, d)
+            mainHandler.post {
+                if (id != requestId || found.isEmpty()) return@post
+                val ic = currentInputConnection ?: return@post
+                val words = found.map {
+                    when (caseNow) {
+                        Shift.LOCKED -> it.word.uppercase(Locale.ROOT)
+                        Shift.ON -> it.word.replaceFirstChar { ch -> ch.uppercaseChar() }
+                        Shift.OFF -> it.word
+                    }
+                }.distinct()
+                val before = ic.getTextBeforeCursor(1, 0) ?: ""
+                val space = if (before.isNotEmpty() && (before.last().isLetterOrDigit() || before.last() in ".,!?;:")) " " else ""
+                undo.pending = null
+                autoUndo = null
+                glided = words
+                ic.commitText(space + words.first(), 1)
+                if (shift == Shift.ON) setShift(Shift.OFF)
+                view?.setSuggestions(words.take(3))
             }
-        }.distinct()
-        val before = ic.getTextBeforeCursor(1, 0) ?: ""
-        val space = if (before.isNotEmpty() && (before.last().isLetterOrDigit() || before.last() in ".,!?;:")) " " else ""
-        undo.pending = null
-        autoUndo = null
-        glided = words
-        ic.commitText(space + words.first(), 1)
-        if (shift == Shift.ON) setShift(Shift.OFF)
-        view?.setSuggestions(words.take(3))
+        }
     }
 
     /** Capital letter at the start of a sentence, as the text field asks. */
@@ -443,6 +499,9 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     }
 
     companion object {
+        /** Token for the dictionary jobs on the worker thread. */
+        private val SUGGEST = Any()
+
         private val PASSWORD_VARIATIONS = setOf(
             InputType.TYPE_TEXT_VARIATION_PASSWORD,
             InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,

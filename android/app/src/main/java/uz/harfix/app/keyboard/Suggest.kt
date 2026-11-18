@@ -4,9 +4,12 @@ import java.io.File
 import java.util.Locale
 
 /**
- * Suggestions for the word being typed, and the autocorrection to make when it ends. Corrects only
- * when it is fairly sure: the word is unknown, the best candidate is close, common and clearly
- * better than the next one.
+ * Suggestions for the word being typed, and the autocorrection to make when it ends.
+ *
+ * A word is corrected when it is unknown, a common word is close (a neighbour key, a forgotten
+ * new letter, swapped or missing letters) and clearly better than the next candidate. Uzbek words
+ * take many endings that Wikipedia rarely shows (ketyapman, tuşundim); a word that is a known
+ * stem plus such an ending is left alone, unless only a new letter is missing (bosqa → boşqa).
  */
 object Suggest {
     /** [words]: up to three to show (the first in the middle); [autocorrect]: what to change the word to. */
@@ -14,26 +17,53 @@ object Suggest {
 
     val EMPTY = Result(emptyList(), null)
 
-    private fun maxCost(len: Int) = if (len <= 3) 1f else if (len <= 6) 1.5f else 2f
-
     /** How far a word of this length may be changed without asking. */
-    private fun sureCost(len: Int) = if (len <= 4) 0.7f else if (len <= 7) 1f else 1.5f
+    private fun sureCost(len: Int) = if (len <= 3) 0.6f else if (len <= 7) 1f else 1.3f
+
+    /** Common endings (person, tense, case, plural), longest first. */
+    private val ENDINGS = (
+        "yaptilar yapsizmi yaptimi yapmiz yapsiz yapman yapsan yapti ganman gansiz ganmiz moqçiman moqçi " +
+            "moqda madim maganman maymiz dingiz dilar ding dim dik di gan larning lardan larni larga larda lar " +
+            "ning dagi dan ni ga da ka qa ingiz imiz ing im si aman asan adi amiz asiz adilar ay ib iş sang sa " +
+            "misiz mi mas may man san miz siz dek day lik li çi çilar ça"
+        ).split(' ').filter { it.isNotEmpty() }.distinct().sortedByDescending { it.length }
+
+    /** A known stem with a common ending: a real word the dictionary does not list. */
+    fun inflected(dict: Dictionary, key: String): Boolean {
+        for (end in ENDINGS) {
+            if (!key.endsWith(end)) continue
+            val stem = key.substring(0, key.length - end.length)
+            val e = dict.lookup(stem)
+            if (stem.length >= 3 && (e != null || dict.hasPrefix(stem))) return true
+            if (stem.length == 2 && e != null && e.weight >= 60) return true
+        }
+        return false
+    }
 
     fun forWord(dict: Dictionary, user: UserWords?, typed: String): Result {
         val key = Dictionary.normalize(typed)
         if (key.isEmpty() || key.any { !(it.isLetter() || it == '\'') } || key.length > 24) return EMPTY
-        val known = dict.lookup(key) != null || user?.knows(key) == true
+        val capital = typed[0].isUpperCase()
+        val entry = dict.lookup(key)
+        // a lower-case word that only matches a name ("kitab" → the town Kitab) is not known
+        val known = (entry != null && (!entry.isName || capital)) || user?.knows(key) == true
         val completions = dict.completions(key, 6).filter { it.key != key }
-        val corrections = if (key.length >= 2) dict.corrections(key, 6, maxCost(key.length)) else emptyList()
 
+        var corrections = emptyList<Scored>()
         var fix: String? = null
-        if (!known && corrections.isNotEmpty()) {
-            val best = corrections[0]
+        if (!known && key.length >= 2) {
+            val max = sureCost(key.length)
+            corrections = dict.corrections(key, Typing.twins(key[0]), 6, max)
+            if (corrections.isEmpty()) corrections = dict.corrections(key, Typing.near(key[0]), 6, max)
+            // names only when very close: ozbekiston → Özbekiston, but never sen → Şen
+            if (!capital) corrections = corrections.filter { !it.entry.isName || (it.cost <= 0.6f && it.entry.weight >= 120) }
+            val best = corrections.firstOrNull()
             val second = corrections.getOrNull(1)
-            val nameOk = best.entry.word[0].isLowerCase() || typed[0].isUpperCase()
-            val sure = best.cost > 0f && best.cost <= sureCost(key.length) && best.entry.weight >= 40 &&
-                (second == null || second.score - best.score >= 0.25f)
-            if (sure && nameOk) fix = matchCase(best.entry.word, typed)
+            if (best != null && (best.cost <= 0.3f || !inflected(dict, key)) &&
+                (second == null || second.score - best.score >= 0.15f)
+            ) {
+                fix = matchCase(best.entry.word, typed)
+            }
         }
 
         val out = LinkedHashSet<String>()
@@ -42,8 +72,8 @@ object Suggest {
             known -> out.add(typed)
         }
         user?.completions(key, 2)?.forEach { out.add(matchCase(it, typed)) }
+        corrections.forEach { out.add(matchCase(it.entry.word, typed)) }
         completions.forEach { out.add(matchCase(it.word, typed)) }
-        corrections.forEach { if (it.entry.key != key) out.add(matchCase(it.entry.word, typed)) }
         if (fix != null) out.add(typed) // keep what was typed, one tap away
         return Result(out.take(3), fix)
     }
@@ -73,7 +103,7 @@ class UserWords(private val file: File) {
     private val counts = HashMap<String, Int>()
     private var dirty = false
 
-    fun load() {
+    @Synchronized fun load() {
         counts.clear()
         if (!file.exists()) return
         file.forEachLine(Charsets.UTF_8) { line ->
@@ -82,9 +112,9 @@ class UserWords(private val file: File) {
         }
     }
 
-    fun knows(key: String): Boolean = (counts[key] ?: 0) >= 2
+    @Synchronized fun knows(key: String): Boolean = (counts[key] ?: 0) >= 2
 
-    fun learn(word: String, by: Int = 1) {
+    @Synchronized fun learn(word: String, by: Int = 1) {
         val key = Dictionary.normalize(word)
         if (!VALID.matches(key)) return
         counts[key] = (counts[key] ?: 0) + by
@@ -94,11 +124,11 @@ class UserWords(private val file: File) {
         }
     }
 
-    fun completions(prefix: String, limit: Int): List<String> =
+    @Synchronized fun completions(prefix: String, limit: Int): List<String> =
         counts.entries.filter { it.value >= 2 && it.key != prefix && it.key.startsWith(prefix) }
             .sortedByDescending { it.value }.take(limit).map { it.key }
 
-    fun save() {
+    @Synchronized fun save() {
         if (!dirty) return
         dirty = false
         try {
@@ -107,7 +137,7 @@ class UserWords(private val file: File) {
         }
     }
 
-    fun clear() {
+    @Synchronized fun clear() {
         counts.clear()
         dirty = false
         file.delete()
