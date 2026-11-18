@@ -5,7 +5,13 @@
     Ctrl+Shift+H  convert the selected text in any program
 
 It steps aside in password fields, programs on the exclusion list, full
-screen apps (games, slide shows) and programs running as administrator."""
+screen apps (games, slide shows) and programs running as administrator.
+
+After a click or an arrow key the hook no longer knows what is before the
+caret. If the next key is ' or h (the user went back into "to|liq" to add
+the apostrophe), it lets the key through and the worker thread reads the
+text before the caret through UI Automation a moment later, then makes the
+swap it would have made right away."""
 import ctypes
 import logging
 import queue
@@ -16,7 +22,7 @@ from ctypes import wintypes as w
 from yangi_alifbo import convert_to
 
 from . import win
-from .typist import Typist
+from .typist import LATE_KEYS, Typist, is_shown, late_swap
 
 log = logging.getLogger("harfix.engine")
 
@@ -24,6 +30,10 @@ HOTKEY_TOGGLE, HOTKEY_SELECTION = 1, 2
 HOTKEYS = {HOTKEY_TOGGLE: (win.MOD_CONTROL | win.MOD_SHIFT, ord("Y")),
            HOTKEY_SELECTION: (win.MOD_CONTROL | win.MOD_SHIFT, ord("H"))}
 GUARD_EVERY = 0.25  # seconds between checks of the focused window
+# Late swaps: when to look at the text after the key (seconds; again if the
+# program has not shown the key yet), and how many characters to read
+LATE_CHECKS = (0.03, 0.1, 0.25)
+LATE_CONTEXT = 32
 # Keys that move the caret or change text in ways we cannot follow
 _RESET_KEYS = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E, 0x1B}  # PgUp/Dn End Home arrows Ins Del Esc
 
@@ -46,6 +56,8 @@ class Engine:
         self.blocked = ""  # why we step aside right now ("" = we don't)
         self.swaps = 0
         self.hotkeys_ok: dict[int, bool] = {}
+        self._inputs = 0  # key presses and clicks so far: a waiting late swap checks nothing came after it
+        self._uia = None  # the worker thread's UI Automation (False: not available)
         self._jobs: queue.Queue = queue.Queue()
         self._thread_id = 0
         self._ready = threading.Event()
@@ -102,6 +114,7 @@ class Engine:
 
     def _on_mouse(self, code, wparam, lparam):
         if code == win.HC_ACTION and wparam in win.MOUSE_DOWNS:
+            self._inputs += 1
             self.typist.reset()  # a click may have moved the caret
         return win.user32.CallNextHookEx(None, code, wparam, lparam)
 
@@ -120,6 +133,7 @@ class Engine:
         """True if the key was replaced (and must be swallowed)."""
         if vk in win.MODIFIER_KEYS:
             return False
+        self._inputs += 1
         if not self.enabled or self.blocked:
             self.typist.reset()
             return False
@@ -136,7 +150,14 @@ class Engine:
         if ch is None:
             self.typist.reset()
             return False
-        return self._apply(self.typist.feed("\n" if ch == "\r" else ch))
+        ch = "\n" if ch == "\r" else ch
+        blind = self.typist.prev is None  # the caret moved: we do not know what is before it
+        if self._apply(self.typist.feed(ch)):
+            return True
+        if blind and ch in LATE_KEYS:
+            # Maybe "to|liq" + ': the key goes through, the worker looks at the text (never UIA in here)
+            self._jobs.put(("late", self._inputs, ch, win.user32.GetForegroundWindow(), time.monotonic()))
+        return False
 
     def _apply(self, swap) -> bool:
         if swap is None:
@@ -161,8 +182,7 @@ class Engine:
                 if hwnd != last_window or focus != last_focus:
                     self.typist.reset()
                     if hwnd != last_window:
-                        app = (win.process_name(hwnd), not win.self_elevated() and win.is_elevated(hwnd)) \
-                            if hwnd else ("", False)
+                        app = self._app_of(hwnd) if hwnd else ("", False)
                     last_window, last_focus = hwnd, focus
                 if not self.enabled or not hwnd:
                     continue
@@ -171,6 +191,11 @@ class Engine:
                 log.exception("guard")
         if uia:
             uia.close()
+
+    @staticmethod
+    def _app_of(hwnd) -> tuple[str, bool]:
+        """(program file name, runs as administrator while we do not)."""
+        return win.process_name(hwnd), not win.self_elevated() and win.is_elevated(hwnd)
 
     def _why_blocked(self, hwnd, app, uia) -> str:
         name, admin = app
@@ -184,21 +209,70 @@ class Engine:
             return "password"
         return ""
 
-    # --- hotkeys --------------------------------------------------------------------
+    # --- worker: hotkeys and late swaps ------------------------------------------------
     def _worker(self):
         while True:
             job = self._jobs.get()
             if job is None:
-                return
+                break
             try:
-                if job == ("hotkey", HOTKEY_TOGGLE):
+                if job[0] == "late":
+                    self._late_swap(*job[1:])
+                elif job == ("hotkey", HOTKEY_TOGGLE):
                     self.enabled = not self.enabled
                     self.typist.reset()
                     self.on_event("toggled", enabled=self.enabled)
                 elif job == ("hotkey", HOTKEY_SELECTION):
                     self.on_event("selection", **self.convert_selection())
             except Exception:
-                log.exception("hotkey job")
+                log.exception("worker job %s", job[0])
+        if self._uia:
+            self._uia.close()
+
+    def _worker_uia(self):
+        """UI Automation for the worker thread (COM objects stay in the thread that made them)."""
+        if self._uia is None:
+            from .uia import Automation
+            try:
+                self._uia = Automation()
+            except Exception:
+                log.warning("UI Automation is not available; a late ' or h is not swapped")
+                self._uia = False
+        return self._uia or None
+
+    def _late_swap(self, inputs: int, ch: str, hwnd, pressed: float):
+        """`ch` (' or h) went through while the typist knew nothing about the
+        text, because the caret had moved (a click, the arrow keys...). Read
+        what is now before the caret and, if `ch` completes a pair there
+        (to|liq + ' -> to'|liq), swap it as feed() would have: tö|liq."""
+        uia = self._worker_uia()
+        if uia is None or not self._still_late(inputs, hwnd) or self._why_blocked(hwnd, self._app_of(hwnd), uia):
+            return
+        for after in LATE_CHECKS:
+            wait = pressed + after - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            if not self._still_late(inputs, hwnd):
+                return
+            text = uia.text_before_caret(LATE_CONTEXT)
+            if text is None:
+                return  # this program does not show us its text
+            if is_shown(text, ch):
+                break
+        else:
+            return
+        found = late_swap(text, ch)
+        if not found or not self._still_late(inputs, hwnd):
+            return
+        typed, out, word = found
+        win.type_swap(2, out)
+        self.typist.adopt(typed, out, word)
+        self.swaps += 1
+
+    def _still_late(self, inputs: int, hwnd) -> bool:
+        """Nothing happened since the key: no other key or click, same window, still allowed to type."""
+        return (inputs == self._inputs and self.enabled and not self.blocked
+                and win.user32.GetForegroundWindow() == hwnd)
 
     def convert_selection(self) -> dict:
         """Copies the selected text, converts it and pastes it back. Whatever
