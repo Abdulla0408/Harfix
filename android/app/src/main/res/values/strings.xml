@@ -5,4 +5,8 @@
     <string name="subtype">Özbekça (Harfix)</string>
     <string name="words_name">Harfix: odatiy klaviaturada</string>
     <string name="words_description">Gboard yoki boşqa istalgan klaviaturada yozganingizda oʻ, gʻ, sh, ch harflari yozilişi bilan ö, ğ, ş, ç ga almaşadi. Kerak bölmasa — darhol ⌫ bosing, harflar qaytadi. Faqat siz yozayotgan matn maydoni körib çiqiladi, heç narsa saqlanmaydi va yuborilmaydi. Parol, e-mail, sayt manzili maydonlari, havolalar va kirill matn tegilmaydi.</string>
+    <string name="words_tile">Harfix</string>
+    <string name="words_tile_on">Yoqilgan</string>
+    <string name="words_tile_off">Öçiq</string>
+    <string name="words_tile_setup">Sozlaş kerak</string>
 </resources>

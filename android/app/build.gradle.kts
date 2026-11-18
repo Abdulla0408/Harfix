@@ -24,8 +24,18 @@ android {
         applicationId = "uz.harfix.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.4.0"
+        versionCode = 9
+        versionName = "1.5.0"
+    }
+
+    // direct: the APK on harfix.uz and Telegram. No accessibility service, so Google Play Protect
+    //         does not block it when it is installed from a file.
+    // play:   the Google Play bundle. Adds "Odatiy klaviaturada" (WordsService + WordsTile,
+    //         declared in src/play/AndroidManifest.xml).
+    flavorDimensions += "store"
+    productFlavors {
+        create("direct") { dimension = "store" }
+        create("play") { dimension = "store" }
     }
 
     signingConfigs {
@@ -70,8 +80,8 @@ android {
 // rejects; stop at the start instead. Android Studio's "Generate Signed Bundle / APK" passes its
 // own key (android.injected.signing.*), so it still works without the file.
 gradle.taskGraph.whenReady {
-    val packaging = listOf("assembleRelease", "bundleRelease", "packageRelease", "packageReleaseBundle")
-    val wantsRelease = packaging.any { hasTask("${project.path}:$it") }
+    val packaging = Regex("""^(assemble|bundle|package)\w*Release(Bundle)?$""")
+    val wantsRelease = allTasks.any { it.project == project && packaging.matches(it.name) }
     val hasKey = signing.getProperty("storeFile") != null ||
         project.hasProperty("android.injected.signing.store.file")
     if (wantsRelease && !hasKey) {

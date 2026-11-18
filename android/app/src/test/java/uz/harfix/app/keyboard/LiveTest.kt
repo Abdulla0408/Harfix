@@ -28,6 +28,15 @@ class LiveTest {
     }
 
     @Test
+    fun lateApostrophe() {
+        // "toliq" typed without the mark, cursor moved back behind the o: the keyboard passes
+        // the text before the cursor ("to"), so the late ' still becomes ö
+        assertEquals(Swap(1, "ö"), Live.swap("Men to", '\''))
+        assertEquals(Swap(1, "ğ"), Live.swap("tog", 'ʻ'))
+        assertEquals(Swap(1, "ş"), Live.swap("is", 'h'))
+    }
+
+    @Test
     fun undo() {
         val u = Live.Undo()
         u.pending = "sh" to "ş"
