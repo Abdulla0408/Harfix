@@ -58,11 +58,56 @@
   $("privacy").addEventListener("click", function () { A.openUrl(PRIVACY_URL); });
 
   // --- tabs ----------------------------------------------------------------------
+  // The glass "drop" under the active tab: placed from the tab's offsetLeft/width, it glides
+  // to the new tab on a spring (style.css) and stretches a little while it moves.
+  var nav = document.querySelector(".tabs");
+  var tabNames = Array.prototype.map.call(document.querySelectorAll(".tab"), function (b) { return b.dataset.tab; });
+  var drop = document.createElement("span");
+  drop.className = "tab-drop";
+  drop.setAttribute("aria-hidden", "true");
+  drop.appendChild(document.createElement("span"));
+  nav.insertBefore(drop, nav.firstChild);
+  var reduceMotion = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+  var dropX = null;
+  function placeDrop(animate) {
+    var b = nav.querySelector(".tab.active");
+    if (!b || !nav.offsetWidth) return; // the bar is hidden while typing: placed again when it shows
+    var x = b.offsetLeft, w = b.offsetWidth, moving = animate && dropX !== null && dropX !== x;
+    drop.classList.toggle("still", !moving);
+    drop.style.width = w + "px";
+    drop.style.transform = "translateX(" + x + "px)";
+    if (moving && !reduceMotion.matches && drop.firstChild.animate) {
+      var s = Math.min(1.35, 1 + Math.abs(x - dropX) / w * 0.12);
+      drop.firstChild.animate([
+        { transform: "scale(1, 1)" },
+        { transform: "scale(" + s + ", .9)", offset: 0.35 },
+        { transform: "scale(1, 1)" }
+      ], { duration: 460, easing: "cubic-bezier(.3, .7, .4, 1)" });
+    }
+    dropX = x;
+  }
+  if (window.ResizeObserver) new ResizeObserver(function () { placeDrop(false); }).observe(nav);
+  else window.addEventListener("resize", function () { placeDrop(false); });
+  placeDrop(false);
+
+  // The header shows its edge once the page scrolls under it.
+  var header = document.querySelector(".top");
+  window.addEventListener("scroll", function () { header.classList.toggle("scrolled", window.scrollY > 2); }, { passive: true });
+
   var currentTab = "convert";
   function showTab(name) {
+    var from = tabNames.indexOf(currentTab), to = tabNames.indexOf(name);
     currentTab = name;
     document.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("active", b.dataset.tab === name); });
-    document.querySelectorAll(".panel").forEach(function (p) { p.classList.toggle("active", p.id === "tab-" + name); });
+    document.querySelectorAll(".panel").forEach(function (p) {
+      var on = p.id === "tab-" + name;
+      if (on && !p.classList.contains("active")) { // slide in from the side of the tab we came from
+        p.classList.toggle("from-left", to > from);
+        p.classList.toggle("from-right", to < from);
+      }
+      p.classList.toggle("active", on);
+    });
+    placeDrop(true);
     if (name === "quiz" && !quiz.started) startQuiz();
     if (name === "keyboard") refresh();
     window.scrollTo(0, 0);
