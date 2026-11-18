@@ -62,6 +62,9 @@ interface KeyboardListener {
 
     /** A word was drawn over the letters: the [path], the letter key centres and a key's width. */
     fun onGlide(path: List<Glide.P>, centers: Map<Char, Glide.P>, keyWidth: Float) {}
+
+    /** A toolbar button or a panel key ("menu", "edit:left", "paste:0"...). */
+    fun onAction(action: String) {}
 }
 
 /** The Harfix keyboard, drawn by hand: no XML keyboards, works the same on every phone. */
@@ -123,6 +126,15 @@ class KeyboardView(context: Context) : View(context) {
     private var downY = 0f
     /** Width of a letter key, measured in [computeKeys]. */
     private var letterWidth = 0f
+
+    /** One-handed: 0 off, 1 keys on the left, 2 on the right. */
+    private var oneHand = 0
+    /** Key height: 1 normal, below or above for small and large keyboards. */
+    private var scale = 1f
+    /** 0 follows the phone, 1 light, 2 dark. */
+    private var themeMode = 0
+    private val gutterSwitch = RectF()
+    private val gutterOff = RectF()
     private val bgPaint = Paint()
     /** The background gradient is made once per size and theme, not on every frame. */
     private var bgKey: Pair<Int, KeyboardTheme>? = null
@@ -131,8 +143,25 @@ class KeyboardView(context: Context) : View(context) {
     private var baseNode: Any? = null // a RenderNode; typed loosely so API 26-28 never loads the class
     private var baseDirty = true
 
-    private fun isDark() =
-        resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+    private fun isDark() = when (themeMode) {
+        1 -> false
+        2 -> true
+        else -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+    }
+
+    /** One-handed mode, size and theme (from the menu). */
+    fun setLook(oneHand: Int, scale: Float, themeMode: Int) {
+        val changed = oneHand != this.oneHand || scale != this.scale || themeMode != this.themeMode
+        this.oneHand = oneHand
+        this.scale = scale
+        this.themeMode = themeMode
+        if (!changed) return
+        theme = KeyboardTheme(isDark())
+        baseDirty = true
+        requestLayout()
+        computeKeys()
+        invalidate()
+    }
 
     private val padTop get() = 6 * density
     private val padX get() = 3 * density
@@ -141,7 +170,7 @@ class KeyboardView(context: Context) : View(context) {
 
     /** Normal key height: 54dp, 40dp in landscape. */
     private fun keyHeight(): Float =
-        (if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) 40f else 54f) * density
+        (if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) 40f else 54f) * density * scale
 
     fun setLayout(l: Layout) {
         layout = l
@@ -211,10 +240,16 @@ class KeyboardView(context: Context) : View(context) {
         val gapY = 5 * density
         var y = padTop + stripHeight
         letterWidth = 0f
+        // one-handed: the keys take 84% of the width, the rest holds two buttons
+        val usable = if (oneHand == 0) width.toFloat() else width * 0.84f
+        val left = if (oneHand == 2) width - usable else 0f
+        val gutterLeft = if (oneHand == 1) usable else 0f
+        val gutterRight = if (oneHand == 1) width.toFloat() else width - usable
+        val rowsTop = y
         for (row in layout.rows) {
             val h = keyHeight() * row.height
-            val unit = (width - padX * 2) / row.keys.sumOf { it.width.toDouble() }.toFloat()
-            var x = padX
+            val unit = (usable - padX * 2) / row.keys.sumOf { it.width.toDouble() }.toFloat()
+            var x = left + padX
             for (k in row.keys) {
                 val w = k.width * unit
                 if (k.kind != KeyKind.SPACER) {
@@ -224,6 +259,14 @@ class KeyboardView(context: Context) : View(context) {
                 x += w
             }
             y += h
+        }
+        if (oneHand != 0) {
+            val mid = (rowsTop + y) / 2
+            gutterSwitch.set(gutterLeft, rowsTop, gutterRight, mid)
+            gutterOff.set(gutterLeft, mid, gutterRight, y)
+        } else {
+            gutterSwitch.setEmpty()
+            gutterOff.setEmpty()
         }
     }
 
@@ -252,6 +295,82 @@ class KeyboardView(context: Context) : View(context) {
     private fun stripCellAt(x: Float): Int {
         val w = (width - padX * 2) / 3f
         return ((x - padX) / w).toInt().coerceIn(0, 2)
+    }
+
+    /** The strip shows the toolbar when there is nothing to suggest, and always over a panel. */
+    private val toolbarShown get() = suggestions.isEmpty() || layout.name in Layouts.PANELS
+
+    private fun toolbarActions(): List<String> =
+        listOf(if (layout.name in Layouts.PANELS) "back" else "menu", "clipboard", "convert", "settings", "voice")
+
+    private fun toolbarCellAt(x: Float): Int {
+        val w = (width - padX * 2) / TOOLBAR_CELLS
+        return ((x - padX) / w).toInt().coerceIn(0, TOOLBAR_CELLS - 1)
+    }
+
+    private fun drawToolbar(c: Canvas) {
+        val t = theme
+        val actions = toolbarActions()
+        val w = (width - padX * 2) / TOOLBAR_CELLS
+        val top = padTop / 2
+        val bottom = padTop + stripHeight - 2 * density
+        val cy = (top + bottom) / 2
+        val s = minOf(w, bottom - top) * 0.26f
+        actions.forEachIndexed { i, action ->
+            val cx = padX + w * (i + 0.5f)
+            if (i == stripCell && stripPointer >= 0) {
+                fill.color = t.keyPressed
+                val r = (bottom - top) / 2
+                c.drawCircle(cx, cy, r, fill)
+            }
+            stroke.color = t.strip
+            stroke.strokeWidth = 1.8f * density
+            fill.color = t.strip
+            when (action) {
+                "menu" -> {
+                    val g = s * 0.42f
+                    val rr = s * 0.18f
+                    for (dx in listOf(-1, 1)) for (dy in listOf(-1, 1)) {
+                        val x0 = cx + dx * g - s * 0.32f
+                        val y0 = cy + dy * g - s * 0.32f
+                        c.drawRoundRect(x0, y0, x0 + s * 0.64f, y0 + s * 0.64f, rr, rr, fill)
+                    }
+                }
+                "back" -> {
+                    c.drawLine(cx - s * 0.7f, cy - s * 0.7f, cx + s * 0.7f, cy + s * 0.7f, stroke)
+                    c.drawLine(cx + s * 0.7f, cy - s * 0.7f, cx - s * 0.7f, cy + s * 0.7f, stroke)
+                }
+                "clipboard" -> {
+                    c.drawRoundRect(cx - s * 0.7f, cy - s * 0.8f, cx + s * 0.7f, cy + s * 0.95f, s * 0.18f, s * 0.18f, stroke)
+                    c.drawRoundRect(cx - s * 0.32f, cy - s * 1.0f, cx + s * 0.32f, cy - s * 0.62f, s * 0.12f, s * 0.12f, fill)
+                    c.drawLine(cx - s * 0.36f, cy - s * 0.1f, cx + s * 0.36f, cy - s * 0.1f, stroke)
+                    c.drawLine(cx - s * 0.36f, cy + s * 0.35f, cx + s * 0.2f, cy + s * 0.35f, stroke)
+                }
+                "convert" -> text(c, "oʻ→ö", cx, cy, 15 * sp, t.strip, true)
+                "settings" -> {
+                    c.drawCircle(cx, cy, s * 0.42f, stroke)
+                    for (k in 0 until 8) {
+                        val a = Math.PI * k / 4
+                        val cos = Math.cos(a).toFloat()
+                        val sin = Math.sin(a).toFloat()
+                        c.drawLine(cx + cos * s * 0.62f, cy + sin * s * 0.62f, cx + cos * s * 0.92f, cy + sin * s * 0.92f, stroke)
+                    }
+                }
+                "voice" -> {
+                    c.drawRoundRect(cx - s * 0.3f, cy - s * 0.95f, cx + s * 0.3f, cy + s * 0.2f, s * 0.3f, s * 0.3f, fill)
+                    c.drawArc(cx - s * 0.6f, cy - s * 0.55f, cx + s * 0.6f, cy + s * 0.45f, 0f, 180f, false, stroke)
+                    c.drawLine(cx, cy + s * 0.45f, cx, cy + s * 0.9f, stroke)
+                }
+            }
+        }
+    }
+
+    /** One-handed mode: switch side (top half of the gap) and back to full width (bottom half). */
+    private fun drawGutter(c: Canvas) {
+        if (oneHand == 0) return
+        val t = theme
+        text(c, "⇆", gutterSwitch.centerX(), gutterSwitch.centerY(), 24 * sp, t.text, false)
+        text(c, "⤢", gutterOff.centerX(), gutterOff.centerY(), 24 * sp, t.text, false)
     }
 
     /** The key under (x, y), or the nearest one within 12dp. */
@@ -422,6 +541,13 @@ class KeyboardView(context: Context) : View(context) {
             KeyKind.ENTER -> drawEnter(c, cx, cy, s, color)
             KeyKind.SPACE -> text(c, spaceLabel, cx, cy, textSize(k, r), t.hint, false)
             KeyKind.GLOBE -> drawGlobe(c, cx, cy, s * 0.9f, color)
+            KeyKind.ACTION -> {
+                label.textSize = 15 * sp
+                val room = r.width() - 16 * density
+                val w = label.measureText(k.label)
+                val size = if (w > room) maxOf(10 * sp, 15 * sp * room / w) else 15 * sp
+                text(c, k.label, cx, cy, size, color, false)
+            }
             else -> text(c, k.label, cx, cy, textSize(k, r), color, false)
         }
     }
@@ -469,7 +595,10 @@ class KeyboardView(context: Context) : View(context) {
                 drawKey(c, touch.key, r, true)
             }
         }
-        if (strip) drawStrip(c)
+        if (strip) {
+            if (toolbarShown) drawToolbar(c) else drawStrip(c)
+        }
+        drawGutter(c)
 
         if (showPreview) {
             for (touch in touches.values) {
@@ -650,8 +779,22 @@ class KeyboardView(context: Context) : View(context) {
     /** Releases a key: types its text or runs its action. */
     private fun fire(touch: Touch) {
         val k = touch.key
-        if (k.kind == KeyKind.CHAR || k.kind == KeyKind.NEW_LETTER) listener?.onText(shiftText(k.text))
-        else listener?.onKey(k.kind)
+        when (k.kind) {
+            KeyKind.CHAR, KeyKind.NEW_LETTER -> listener?.onText(shiftText(k.text))
+            KeyKind.ACTION -> listener?.onAction(k.action)
+            else -> listener?.onKey(k.kind)
+        }
+    }
+
+    /** Holding an arrow of the editing panel moves the cursor again and again. */
+    private val actionRepeat = object : Runnable {
+        var pointer = 0
+        var action = ""
+        override fun run() {
+            listener?.onAction(action)
+            timers[pointer] = this
+            handler.postDelayed(this, 60)
+        }
     }
 
     private val backspaceRepeat = object : Runnable {
@@ -700,10 +843,24 @@ class KeyboardView(context: Context) : View(context) {
                 // the suggestion strip
                 if (strip && e.getY(i) < padTop + stripHeight - 2 * density && touches.isEmpty()) {
                     stripPointer = id
-                    stripCell = stripCellAt(e.getX(i))
+                    stripCell = if (toolbarShown) toolbarCellAt(e.getX(i)) else stripCellAt(e.getX(i))
                     listener?.onPress(KeyKind.CHAR)
                     invalidate()
                     return true
+                }
+                if (oneHand != 0 && touches.isEmpty()) {
+                    val x = e.getX(i)
+                    val y = e.getY(i)
+                    val hit = when {
+                        gutterSwitch.contains(x, y) -> "onehand:switch"
+                        gutterOff.contains(x, y) -> "onehand:off"
+                        else -> null
+                    }
+                    if (hit != null) {
+                        listener?.onPress(KeyKind.CHAR)
+                        listener?.onAction(hit)
+                        return true
+                    }
                 }
                 // fast two-thumb typing: a new finger releases the keys still held
                 for ((tid, t) in touches) {
@@ -736,6 +893,13 @@ class KeyboardView(context: Context) : View(context) {
                         backspaceRepeat.pointer = id
                         schedule(id, 400, backspaceRepeat)
                     }
+                    KeyKind.ACTION -> if (touch.key.action in REPEAT) {
+                        listener?.onAction(touch.key.action)
+                        touch.consumed = true
+                        actionRepeat.pointer = id
+                        actionRepeat.action = touch.key.action
+                        schedule(id, 400, actionRepeat)
+                    }
                     else -> armLongPress(id, touch)
                 }
                 invalidate()
@@ -744,7 +908,7 @@ class KeyboardView(context: Context) : View(context) {
                 for (i in 0 until e.pointerCount) {
                     val id = e.getPointerId(i)
                     if (id == stripPointer) {
-                        val cell = stripCellAt(e.getX(i))
+                        val cell = if (toolbarShown) toolbarCellAt(e.getX(i)) else stripCellAt(e.getX(i))
                         if (cell != stripCell) {
                             stripCell = cell
                             invalidate()
@@ -776,11 +940,15 @@ class KeyboardView(context: Context) : View(context) {
                 val i = e.actionIndex
                 val id = e.getPointerId(i)
                 if (id == stripPointer) {
-                    val cell = stripCellAt(e.getX(i))
-                    val word = stripCells().getOrNull(cell)?.first.orEmpty()
                     stripPointer = -1
                     stripCell = -1
-                    if (word.isNotEmpty()) listener?.onSuggestion(word)
+                    if (toolbarShown) {
+                        val action = toolbarActions()[toolbarCellAt(e.getX(i))]
+                        listener?.onAction(action)
+                    } else {
+                        val word = stripCells().getOrNull(stripCellAt(e.getX(i)))?.first.orEmpty()
+                        if (word.isNotEmpty()) listener?.onSuggestion(word)
+                    }
                     invalidate()
                     return true
                 }
@@ -818,5 +986,7 @@ class KeyboardView(context: Context) : View(context) {
         private val FIRE_ON_NEXT = setOf(KeyKind.CHAR, KeyKind.NEW_LETTER, KeyKind.SPACE)
         private val SLIDE = setOf(KeyKind.CHAR, KeyKind.NEW_LETTER)
         private val PREVIEW = SLIDE
+        private const val TOOLBAR_CELLS = 5
+        private val REPEAT = setOf("edit:left", "edit:right", "edit:up", "edit:down")
     }
 }
