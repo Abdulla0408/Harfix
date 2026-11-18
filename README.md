@@ -11,3 +11,7 @@ oʻ → ö, gʻ → ğ, sh → ş, ch → ç. Lotin va kirill matnni qabul qilad
 | `desktop/` | Windows ilova ([desktop/README.md](desktop/README.md)) |
 
 Botni ishga tushirish: [bot/README.md](bot/README.md).
+
+Maxfiylik siyosati: <https://harfix.uz/maxfiylik/> — ilovalar ichidagi havola ham, Google Play va Microsoft Store
+sahifalari ham shu sahifani koʻrsatadi. [PRIVACY.md](PRIVACY.md) — ilovalar aslida nima qilishining batafsil yozuvi;
+biror narsa oʻzgarsa, saytdagi sahifani ham shunga moslang.

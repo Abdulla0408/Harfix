@@ -66,6 +66,21 @@ android {
     }
 }
 
+// Without keystore.properties AGP quietly makes an unsigned release APK/AAB, which Google Play
+// rejects; stop at the start instead. Android Studio's "Generate Signed Bundle / APK" passes its
+// own key (android.injected.signing.*), so it still works without the file.
+gradle.taskGraph.whenReady {
+    val packaging = listOf("assembleRelease", "bundleRelease", "packageRelease", "packageReleaseBundle")
+    val wantsRelease = packaging.any { hasTask("${project.path}:$it") }
+    val hasKey = signing.getProperty("storeFile") != null ||
+        project.hasProperty("android.injected.signing.store.file")
+    if (wantsRelease && !hasKey) {
+        throw GradleException(
+            "Release build needs a signing key: create android/keystore.properties (see android/README.md, \"Imzolash\").",
+        )
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
