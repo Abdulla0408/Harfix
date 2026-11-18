@@ -73,8 +73,8 @@
   document.querySelectorAll("[data-t]").forEach(function (el) { el.textContent = L(el.dataset.t); });
   $("src").placeholder = L("Matnni shu yerga yozing yoki qoʻying (lotin yoki kirill)…");
 
-  // The privacy policy (PRIVACY.md in the Harfix repository), for the Microsoft Store listing too.
-  var PRIVACY_URL = "https://github.com/Abdulla0408/Harfix/blob/main/PRIVACY.md";
+  // The privacy policy; the Microsoft Store listing points to the same page.
+  var PRIVACY_URL = "https://harfix.uz/maxfiylik/";
   $("privacy").addEventListener("click", function () { call("open_url", PRIVACY_URL); });
 
   // --- navigation ----------------------------------------------------------------------

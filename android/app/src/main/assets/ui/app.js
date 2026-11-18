@@ -53,8 +53,8 @@
   $("src").placeholder = L("Matnni shu yerga yozing yoki qoʻying (lotin yoki kirill)…");
   $("try").placeholder = L("Masalan:") + " Toshkent shahri, oʻzbek tili…"; // the example stays as typed
 
-  // The privacy policy (PRIVACY.md in the Harfix repository); Google Play wants it reachable in the app.
-  var PRIVACY_URL = "https://github.com/Abdulla0408/Harfix/blob/main/PRIVACY.md";
+  // The privacy policy (the same page as the store listings); Google Play wants it reachable in the app.
+  var PRIVACY_URL = "https://harfix.uz/maxfiylik/";
   $("privacy").addEventListener("click", function () { A.openUrl(PRIVACY_URL); });
 
   // --- tabs ----------------------------------------------------------------------

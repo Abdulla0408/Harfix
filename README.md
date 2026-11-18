@@ -12,4 +12,6 @@ oʻ → ö, gʻ → ğ, sh → ş, ch → ç. Lotin va kirill matnni qabul qilad
 
 Botni ishga tushirish: [bot/README.md](bot/README.md).
 
-Ilovalarning maxfiylik siyosati: [PRIVACY.md](PRIVACY.md) (Google Play va Microsoft Store uchun shu havola).
+Maxfiylik siyosati: <https://harfix.uz/maxfiylik/> — ilovalar ichidagi havola ham, Google Play va Microsoft Store
+sahifalari ham shu sahifani koʻrsatadi. [PRIVACY.md](PRIVACY.md) — ilovalar aslida nima qilishining batafsil yozuvi;
+biror narsa oʻzgarsa, saytdagi sahifani ham shunga moslang.

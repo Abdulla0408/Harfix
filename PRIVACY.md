@@ -1,5 +1,8 @@
 # Harfix — maxfiylik siyosati
 
+> Eʼlon qilingan matn: <https://harfix.uz/maxfiylik/> (ilovalar va doʻkon sahifalari shu havolani koʻrsatadi).
+> Bu fayl ilovalar qaysi maʼlumot bilan nima qilishini batafsilroq yozadi.
+
 Kuchga kirgan sana: 17.11.2026
 
 Bu siyosat Harfix ilovalariga tegishli: Android ilova (`uz.harfix.app`) va Harfix klaviaturasi,
