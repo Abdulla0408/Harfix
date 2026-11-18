@@ -39,6 +39,9 @@ class Bridge(private val a: MainActivity) {
             .put("lang_uz_cyrl", p.getBoolean("lang_uz_cyrl", true))
             .put("words", p.getBoolean("words", true))
             .put("words_live", p.getBoolean("words_live", true))
+            .put("autocorrect", p.getBoolean("autocorrect", true))
+            .put("glide", p.getBoolean("glide", true))
+            .put("learn", p.getBoolean("learn", true))
             .put("stats", p.getBoolean("stats", true))
             .put("notify", notify)
             .put("quiz_best", p.getInt("quiz_best", 0))
@@ -61,12 +64,15 @@ class Bridge(private val a: MainActivity) {
     fun set(key: String, value: String) {
         val e = prefs().edit()
         when (key) {
-            "live", "sound", "vibrate", "lang_ru", "lang_uz_cyrl", "words", "words_live", "stats" ->
+            "live", "sound", "vibrate", "lang_ru", "lang_uz_cyrl", "words", "words_live", "stats",
+            "autocorrect", "glide", "learn" ->
                 e.putBoolean(key, value == "true")
             "target" -> e.putString(key, value)
         }
         e.apply()
         if (key == "words") Words.refreshTile(a)
+        // the keyboard's learned words live only on the phone; switching learning off deletes them
+        if (key == "learn" && value != "true") java.io.File(a.filesDir, "user_words.txt").delete()
         if (key == "stats" && value == "true") {
             Online.nextTouch = 0
             Online.touch(a)

@@ -11,8 +11,12 @@ import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import uz.harfix.app.Converter
 import uz.harfix.app.Online
+import java.io.File
+import java.util.Locale
 import kotlin.math.abs
 
 /**
@@ -39,6 +43,33 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     private var sound = false
     private var vibrate = true
     private val audio by lazy { getSystemService(AudioManager::class.java) }
+
+    // dictionary: suggestions, autocorrect, glide typing (Latin letters, ordinary text fields)
+    @Volatile private var dict: Dictionary? = null
+    private lateinit var user: UserWords
+    private var autocorrect = true
+    private var glide = true
+    private var learn = true
+    /** Ordinary text field with the new alphabet on: the strip may show (on the Latin letters). */
+    private var stripAllowed = false
+    private var stripOn = false
+    /** The last autocorrection (typed word, what it became), so Backspace can undo it. */
+    private var autoUndo: Pair<String, String>? = null
+    /** Words the last glide found: the first was typed, the rest stay in the strip. */
+    private var glided: List<String>? = null
+    private var suggestion = Suggest.EMPTY
+
+    override fun onCreate() {
+        super.onCreate()
+        user = UserWords(File(filesDir, UserWords.FILE))
+        user.load()
+        Thread({
+            try {
+                dict = assets.open("dict/uz.txt").use { Dictionary.load(it) }
+            } catch (_: Exception) {
+            }
+        }, "harfix-dictionary").start()
+    }
 
     @Suppress("DEPRECATION")
     private fun prefs(): SharedPreferences = getSharedPreferences("harfix", Context.MODE_MULTI_PROCESS)
@@ -83,6 +114,13 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         live = p.getBoolean("live", true)
         sound = p.getBoolean("sound", false)
         vibrate = p.getBoolean("vibrate", true)
+        autocorrect = p.getBoolean("autocorrect", true)
+        glide = p.getBoolean("glide", true)
+        learn = p.getBoolean("learn", true)
+        if (!learn) user.clear()
+        stripAllowed = liveField && live && (autocorrect || glide)
+        autoUndo = null
+        glided = null
         noSelection = info.initialSelStart == info.initialSelEnd
 
         languages = buildList {
@@ -106,8 +144,10 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
             setEnterIcon(enterIcon(info.imeOptions))
             setShowPreview(!password)
         }
+        updateStrip()
         updateSpaceLabel()
         updateAutoCaps()
+        refreshSuggestions()
     }
 
     private fun enterIcon(options: Int): EnterIcon {
@@ -124,12 +164,15 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
 
     override fun onFinishInputView(finishingInput: Boolean) {
         undo.pending = null
+        autoUndo = null
+        user.save()
         super.onFinishInputView(finishingInput)
     }
 
     override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int, candidatesStart: Int, candidatesEnd: Int) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         noSelection = newSelStart == newSelEnd
+        refreshSuggestions()
         // typing moves the cursor by a character or two; anything else ends the undo chance
         if (noSelection && abs(newSelStart - oldSelStart) <= 2) return
         undo.pending = null
@@ -155,6 +198,14 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     override fun onText(text: String) {
         val ic = currentInputConnection ?: return
         val c = text.singleOrNull()
+        glided = null
+        if (c != null && isWordEnd(c) && finishWord(ic, text)) {
+            undo.pending = null
+            if (shift == Shift.ON) setShift(Shift.OFF)
+            updateAutoCaps()
+            return
+        }
+        autoUndo = null
         var swap: Swap? = null
         if (c != null && liveField && live && noSelection && Live.isTrigger(c)) {
             val before = ic.getTextBeforeCursor(48, 0) ?: ""
@@ -193,6 +244,8 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
             }
             KeyKind.BACKSPACE -> {
                 val ic = currentInputConnection ?: return
+                glided = null
+                if (undoAutocorrect(ic)) return
                 if (undo.pending != null && noSelection) {
                     val s = undo.undo(ic.getTextBeforeCursor(8, 0) ?: "")
                     if (s != null) {
@@ -211,6 +264,9 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
                 val info = currentInputEditorInfo ?: return
                 val ic = currentInputConnection ?: return
                 undo.pending = null
+                glided = null
+                finishWord(ic, "")
+                autoUndo = null
                 val action = info.imeOptions and EditorInfo.IME_MASK_ACTION
                 val noAction = info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
                 val multiLine = info.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
@@ -222,7 +278,9 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
             }
             KeyKind.SPACE -> {
                 undo.pending = null
-                currentInputConnection?.commitText(" ", 1)
+                glided = null
+                val ic = currentInputConnection ?: return
+                if (!finishWord(ic, " ")) ic.commitText(" ", 1)
                 if (shift == Shift.ON) setShift(Shift.OFF)
                 updateAutoCaps()
             }
@@ -259,7 +317,115 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     private fun show(layout: Layout) {
         current = layout
         view?.setLayout(layout)
+        updateStrip()
         if (layout.autoCaps) updateAutoCaps() else setShift(Shift.OFF)
+        refreshSuggestions()
+    }
+
+    // --- dictionary --------------------------------------------------------------------------
+
+    /** The strip and glide work on the Latin letters in ordinary text fields with the new alphabet on. */
+    private fun updateStrip() {
+        val latin = current === letters && letters.name == "latin"
+        stripOn = stripAllowed && latin
+        view?.setStrip(stripOn)
+        view?.setGlide(glide && stripOn)
+    }
+
+    private fun refreshSuggestions() {
+        val v = view ?: return
+        if (!stripOn) return
+        val d = dict
+        val ic = currentInputConnection
+        if (d == null || ic == null) {
+            v.setSuggestions(emptyList())
+            return
+        }
+        val word = Suggest.wordBefore(ic.getTextBeforeCursor(40, 0) ?: "")
+        val g = glided
+        if (g != null && word == g.first()) {
+            v.setSuggestions(g.take(3))
+            return
+        }
+        suggestion = if (word.isEmpty()) Suggest.EMPTY else Suggest.forWord(d, if (learn) user else null, word)
+        v.setSuggestions(suggestion.words)
+    }
+
+    /** Space, punctuation and the like end a word; apostrophes and hyphens are inside words. */
+    private fun isWordEnd(c: Char) =
+        !c.isLetterOrDigit() && !c.isWhitespace() && c != '-' && Converter.APOSTROPHES.indexOf(c) < 0
+
+    /**
+     * A word ends with [end] (" ", punctuation, or "" before Enter): autocorrect it when sure, else
+     * learn it if the dictionary does not know it. Returns true if [end] was typed here.
+     */
+    private fun finishWord(ic: InputConnection, end: String): Boolean {
+        autoUndo = null
+        if (!stripOn || !noSelection) return false
+        val d = dict ?: return false
+        val word = Suggest.wordBefore(ic.getTextBeforeCursor(40, 0) ?: return false)
+        if (word.length < 2) return false
+        val fix = if (autocorrect) Suggest.forWord(d, if (learn) user else null, word).autocorrect else null
+        if (fix != null && fix != word) {
+            ic.beginBatchEdit()
+            ic.deleteSurroundingText(word.length, 0)
+            ic.commitText(fix + end, 1)
+            ic.endBatchEdit()
+            autoUndo = word to fix + end
+            return end.isNotEmpty()
+        }
+        if (learn && d.lookup(word) == null) user.learn(word)
+        return false
+    }
+
+    /** Backspace right after an autocorrection: the typed word comes back and is learned. */
+    private fun undoAutocorrect(ic: InputConnection): Boolean {
+        val (typed, became) = autoUndo ?: return false
+        autoUndo = null
+        if (!noSelection || ic.getTextBeforeCursor(became.length, 0)?.toString() != became) return false
+        ic.beginBatchEdit()
+        ic.deleteSurroundingText(became.length, 0)
+        ic.commitText(typed, 1)
+        ic.endBatchEdit()
+        if (learn) user.learn(typed, 2)
+        return true
+    }
+
+    override fun onSuggestion(text: String) {
+        val ic = currentInputConnection ?: return
+        val word = Suggest.wordBefore(ic.getTextBeforeCursor(40, 0) ?: "")
+        ic.beginBatchEdit()
+        if (word.isNotEmpty()) ic.deleteSurroundingText(word.length, 0)
+        ic.commitText("$text ", 1)
+        ic.endBatchEdit()
+        undo.pending = null
+        autoUndo = null
+        glided = null
+        if (learn && dict?.lookup(text) == null) user.learn(text, 2)
+        if (shift == Shift.ON) setShift(Shift.OFF)
+        updateAutoCaps()
+    }
+
+    override fun onGlide(path: List<Glide.P>, centers: Map<Char, Glide.P>, keyWidth: Float) {
+        val d = dict ?: return
+        val ic = currentInputConnection ?: return
+        val found = Glide.decode(path, centers, keyWidth, d)
+        if (found.isEmpty()) return
+        val words = found.map {
+            when (shift) {
+                Shift.LOCKED -> it.word.uppercase(Locale.ROOT)
+                Shift.ON -> it.word.replaceFirstChar { ch -> ch.uppercaseChar() }
+                Shift.OFF -> it.word
+            }
+        }.distinct()
+        val before = ic.getTextBeforeCursor(1, 0) ?: ""
+        val space = if (before.isNotEmpty() && (before.last().isLetterOrDigit() || before.last() in ".,!?;:")) " " else ""
+        undo.pending = null
+        autoUndo = null
+        glided = words
+        ic.commitText(space + words.first(), 1)
+        if (shift == Shift.ON) setShift(Shift.OFF)
+        view?.setSuggestions(words.take(3))
     }
 
     /** Capital letter at the start of a sentence, as the text field asks. */

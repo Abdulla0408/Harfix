@@ -16,13 +16,17 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
 class KeyboardShotTest {
-    private fun shot(name: String, layout: Layout, shift: Shift = Shift.OFF, enter: EnterIcon = EnterIcon.NEWLINE) {
+    private fun shot(name: String, layout: Layout, shift: Shift = Shift.OFF, enter: EnterIcon = EnterIcon.NEWLINE, words: List<String>? = null) {
         val ctx = RuntimeEnvironment.getApplication()
         val v = KeyboardView(ctx)
         v.setLayout(layout)
         v.setShift(shift)
         v.setEnterIcon(enter)
         v.setSpaceLabel(layout.spaceLabel + if (layout.name == "latin") " ⚡" else "")
+        if (words != null) {
+            v.setStrip(true)
+            v.setSuggestions(words)
+        }
         val w = ctx.resources.displayMetrics.widthPixels
         v.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
         v.layout(0, 0, v.measuredWidth, v.measuredHeight)
@@ -36,6 +40,7 @@ class KeyboardShotTest {
     fun light() {
         val latin = Layouts.latin("Рус", true)
         shot("1-latin", latin)
+        shot("1b-latin-suggestions", latin, words = listOf("Toşkent", "toşkentlik", "Toşkentda"))
         shot("2-latin-shift", latin, Shift.LOCKED, EnterIcon.SEND)
         shot("3-cyrillic", Layouts.cyrillic("Lot", false), enter = EnterIcon.SEARCH)
         shot("4-russian", Layouts.russian("Ўзб", false), enter = EnterIcon.DONE)
@@ -49,5 +54,6 @@ class KeyboardShotTest {
     @Config(qualifiers = "+night")
     fun dark() {
         shot("9-latin-dark", Layouts.latin("Рус", true))
+        shot("9b-latin-dark-suggestions", Layouts.latin("Рус", true), words = listOf("uçun", "ucun", "uçinçi"))
     }
 }

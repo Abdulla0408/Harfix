@@ -94,7 +94,12 @@ def _pages(path, limit):
 
 # wiki words that survive markup stripping
 NOISE = {"turkum", "nbsp", "fayl", "rasm", "thumb", "px", "left", "right", "center", "ref", "url",
-         "isbn", "doi", "commons", "infobox", "wikidata"}
+         "isbn", "doi", "commons", "infobox", "wikidata",
+         # common words of other languages in references and names
+         "the", "of", "and", "in", "de", "al", "la", "le", "des", "du", "von", "van", "der", "to", "on",
+         "is", "by", "for", "at", "an", "as", "or", "from", "et", "el", "il", "di", "del", "los", "las",
+         "und", "die", "das", "den", "ooo", "ii", "iii", "iv", "vi", "vii", "viii", "ix", "xi", "xii",
+         "xiii", "xiv", "xv", "xvi", "xvii", "xviii", "xix", "xx", "xxi"}
 
 
 def foreign(word: str) -> bool:
