@@ -18,6 +18,8 @@ import pystray  # noqa: E402,F401
 import webview  # noqa: E402,F401
 from webview.platforms import winforms  # noqa: E402,F401  (loads .NET, WinForms and WebView2)
 
+import truststore  # noqa: E402,F401  (HTTPS certificates checked by Windows, online.py)
+
 import harfix_desktop.app  # noqa: E402,F401
 from harfix_desktop import VERSION, paths  # noqa: E402
 from harfix_files import convert, pdf  # noqa: E402
@@ -25,6 +27,8 @@ from yangi_alifbo import convert as to_new  # noqa: E402
 
 print("harfix", VERSION, "| installed layout:", paths.INSTALLED, "| pdf:", pdf.available())
 assert paths.INSTALLED, "runtime\\pythonw.exe / app\\ layout not recognised"
+from harfix_desktop import online  # noqa: E402
+assert type(online._tls()).__module__.startswith("truststore"), type(online._tls())
 assert to_new("Oʻzbekiston gʻalaba shahar choy") == "Özbekiston ğalaba şahar çoy", to_new("Oʻzbekiston")
 
 TEXT = "Oʻzbekiston gʻalaba"
