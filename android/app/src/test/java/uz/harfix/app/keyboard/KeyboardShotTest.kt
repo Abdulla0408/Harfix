@@ -16,16 +16,16 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
 class KeyboardShotTest {
-    private fun shot(name: String, layout: Layout, shift: Shift = Shift.OFF, enter: EnterIcon = EnterIcon.NEWLINE, words: List<String>? = null) {
+    private fun shot(name: String, layout: Layout, shift: Shift = Shift.OFF, enter: EnterIcon = EnterIcon.NEWLINE, words: List<String>? = null, toolbar: Boolean = false) {
         val ctx = RuntimeEnvironment.getApplication()
         val v = KeyboardView(ctx)
         v.setLayout(layout)
         v.setShift(shift)
         v.setEnterIcon(enter)
         v.setSpaceLabel(layout.spaceLabel + if (layout.name == "latin") " ⚡" else "")
-        if (words != null) {
+        if (words != null || toolbar) {
             v.setStrip(true)
-            v.setSuggestions(words)
+            v.setSuggestions(words ?: emptyList())
         }
         val w = ctx.resources.displayMetrics.widthPixels
         v.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
@@ -41,6 +41,10 @@ class KeyboardShotTest {
         val latin = Layouts.latin("Рус", true)
         shot("1-latin", latin)
         shot("1b-latin-suggestions", latin, words = listOf("Toşkent", "toşkentlik", "Toşkentda"))
+        shot("1c-latin-toolbar", latin, toolbar = true)
+        shot("10-menu", Layouts.menu(), toolbar = true)
+        shot("11-edit", Layouts.edit(true), toolbar = true)
+        shot("12-clipboard", Layouts.clipboard(listOf("Salom, qalaysiz?", "https://harfix.uz", "Ertaga soat 10 da uçraşamiz")), toolbar = true)
         shot("2-latin-shift", latin, Shift.LOCKED, EnterIcon.SEND)
         shot("3-cyrillic", Layouts.cyrillic("Lot", false), enter = EnterIcon.SEARCH)
         shot("4-russian", Layouts.russian("Ўзб", false), enter = EnterIcon.DONE)

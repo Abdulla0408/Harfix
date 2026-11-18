@@ -1,17 +1,21 @@
 package uz.harfix.app.keyboard
 
-enum class KeyKind { CHAR, NEW_LETTER, SHIFT, BACKSPACE, ENTER, SPACE, SYMBOLS, MORE_SYMBOLS, LETTERS, LANG, GLOBE, SPACER }
+enum class KeyKind { CHAR, NEW_LETTER, SHIFT, BACKSPACE, ENTER, SPACE, SYMBOLS, MORE_SYMBOLS, LETTERS, LANG, GLOBE, SPACER, ACTION }
 
 enum class Shift { OFF, ON, LOCKED }
 
 enum class EnterIcon { NEWLINE, GO, SEARCH, SEND, NEXT, DONE }
 
-/** One key: [label] is also the text it types; [alts] pop up on a long press. */
+/**
+ * One key: [label] is also the text it types; [alts] pop up on a long press. An ACTION key (the
+ * panels: menu, text editing, clipboard) runs [action] instead of typing.
+ */
 data class Key(
     val label: String,
     val kind: KeyKind = KeyKind.CHAR,
     val width: Float = 1f,
     val alts: List<String> = emptyList(),
+    val action: String = "",
 ) {
     val text: String get() = label
 }
@@ -171,4 +175,52 @@ object Layouts {
         "",
         false,
     )
+
+    // --- panels: opened from the toolbar above the keys --------------------------------------
+
+    /** Panel layouts (not letters): the toolbar shows ✕ to close them. */
+    val PANELS = setOf("menu", "edit", "clipboard")
+
+    private fun act(label: String, action: String, width: Float = 1f) = Key(label, KeyKind.ACTION, width, action = action)
+
+    /** The menu: what the keyboard can do besides typing. */
+    fun menu() = Layout(
+        "menu",
+        listOf(
+            Row(listOf(act("🌐  Keyingi til", "lang"), act("✋  Bir qöl", "onehand"))),
+            Row(listOf(act("🎨  Mavzu", "theme"), act("✍️  Tahrirlaş", "edit"))),
+            Row(listOf(act("🔤  Ögiriş", "convert"), act("📋  Bufer", "clipboard"))),
+            Row(listOf(act("↕️  Ölçam", "resize"), act("⚙️  Sozlamalar", "settings"))),
+        ),
+        "",
+        false,
+    )
+
+    /** Text editing: move the cursor, select, copy, cut, paste. [selecting]: arrows extend the selection. */
+    fun edit(selecting: Boolean) = Layout(
+        "edit",
+        listOf(
+            Row(listOf(act("Hammasi", "edit:all"), act("Nusxa", "edit:copy"), act("Kesiş", "edit:cut"), act("Qöyiş", "edit:paste"))),
+            Row(listOf(act("⇤", "edit:home"), act("▲", "edit:up"), act("⇥", "edit:end"))),
+            Row(listOf(act("◀", "edit:left"), act(if (selecting) "✓ Tanlaş" else "Tanlaş", "edit:select"), act("▶", "edit:right"))),
+            Row(listOf(act("ABC", "back"), act("▼", "edit:down"), Key("⌫", KeyKind.BACKSPACE))),
+        ),
+        "",
+        false,
+    )
+
+    /** Recently copied texts (newest first); a tap types one. */
+    fun clipboard(clips: List<String>): Layout {
+        val rows = ArrayList<Row>()
+        if (clips.isEmpty()) {
+            rows.add(Row(listOf(act("Bufer böş: biror matnni nusxalang", "back"))))
+        } else {
+            for ((i, clip) in clips.take(5).withIndex()) {
+                val oneLine = clip.replace('\n', ' ').trim()
+                rows.add(Row(listOf(act(if (oneLine.length > 38) oneLine.take(37) + "…" else oneLine, "paste:$i")), 0.8f))
+            }
+        }
+        rows.add(Row(listOf(act("ABC", "back"), act("Tozalaş", "clip:clear"))))
+        return Layout("clipboard", rows, "", false)
+    }
 }
