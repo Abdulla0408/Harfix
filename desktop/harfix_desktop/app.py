@@ -35,7 +35,7 @@ class App:
         self.quitting = False
         self.hotkeys = {}
         self.engine = EngineProcess(on_event=self._engine_event, log_file=str(log_file("engine")))
-        self.online = Online(self.settings, VERSION, on_change=lambda: self.push("online"))
+        self.online = Online(self.settings, VERSION, on_change=lambda: self.push("online"), store=PACKAGED)
 
     # --- start / stop -------------------------------------------------------------
     def run(self, single: system.SingleInstance):

@@ -1,0 +1,128 @@
+# Builds the Microsoft Store package of Harfix for Windows and tries it out on Windows:
+# the bundled Python must import and convert files, and the installed package must start.
+# The .msix to upload to Partner Center is under the run's Artifacts ("Harfix-msix").
+name: msix
+on:
+  push:
+    paths: ["desktop/**", "core/yangi_alifbo/**", ".github/workflows/msix.yml"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Also send it to the Microsoft Store (needs the STORE_* secrets)"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the MSIX
+        run: python desktop/msix/build_msix.py
+
+      - name: Bundled Python works (imports, .NET, file conversion)
+        run: ./desktop/msix/out/stage/runtime/python.exe desktop/msix/smoke_test.py
+
+      - name: Install it with a test signature and start it
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $msix = (Get-ChildItem desktop/msix/out/*.msix | Select-Object -First 1).FullName
+          [xml]$m = Get-Content desktop/msix/out/stage/AppxManifest.xml
+          $publisher = $m.Package.Identity.Publisher
+          $name = $m.Package.Identity.Name
+
+          # A throwaway certificate with the package's publisher name, trusted on this runner only.
+          # The Store signs the real package itself, so the uploaded .msix stays unsigned.
+          $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher -KeyUsage DigitalSignature `
+            -FriendlyName "Harfix CI" -CertStoreLocation Cert:\CurrentUser\My `
+            -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+          $pw = ConvertTo-SecureString -String "ci" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath ci.pfx -Password $pw | Out-Null
+          Import-PfxCertificate -FilePath ci.pfx -CertStoreLocation Cert:\LocalMachine\TrustedPeople -Password $pw | Out-Null
+          Copy-Item $msix signed.msix
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64\signtool.exe" |
+            Sort-Object FullName | Select-Object -Last 1).FullName
+          & $signtool sign /fd SHA256 /f ci.pfx /p ci signed.msix
+          if ($LASTEXITCODE) { throw "signtool failed" }
+
+          Add-AppxPackage -Path signed.msix
+          $pkg = Get-AppxPackage -Name $name
+          $pkg | Format-List Name, Version, PackageFamilyName, InstallLocation, Status
+
+          Start-Process explorer.exe "shell:AppsFolder\$($pkg.PackageFamilyName)!Harfix"
+          Start-Sleep -Seconds 40
+
+          $procs = Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe'" |
+            Where-Object { $_.ExecutablePath -like "$($pkg.InstallLocation)*" }
+          $procs | Format-Table ProcessId, ParentProcessId, CommandLine -AutoSize -Wrap
+          $logs = @("$env:LOCALAPPDATA\Packages\$($pkg.PackageFamilyName)\LocalCache\Roaming\Harfix\logs",
+                    "$env:APPDATA\Harfix\logs")
+          $text = ""
+          foreach ($d in $logs) {
+            foreach ($f in Get-ChildItem $d -Filter *.log -ErrorAction SilentlyContinue) {
+              Write-Host "===== $($f.FullName)"
+              $t = Get-Content $f.FullName -Raw
+              Write-Host $t
+              $text += $t
+            }
+          }
+          if (-not $procs) { throw "Harfix is not running 40 s after starting it" }
+          if (@($procs).Count -lt 2) { throw "the typing engine process did not start" }
+          if ($text -notmatch "Harfix \d") { throw "Harfix wrote no start line to its log" }
+          if ($text -match "Traceback|crashed") { throw "errors in the log" }
+          Write-Host "Harfix started from the package: OK"
+
+      - name: Windows App Certification Kit
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $appcert = "${env:ProgramFiles(x86)}\Windows Kits\10\App Certification Kit\appcert.exe"
+          if (-not (Test-Path $appcert)) { Write-Host "WACK is not installed on this runner: skipped"; exit 0 }
+          & $appcert reset
+          & $appcert test -appxpackagepath (Resolve-Path signed.msix) -reportoutputpath "$PWD\wack.xml"
+          if (Test-Path wack.xml) {
+            [xml]$r = Get-Content wack.xml
+            Write-Host "WACK overall result: $($r.REPORT.OVERALL_RESULT)"
+            foreach ($t in $r.SelectNodes("//TEST")) {
+              $res = $t.RESULT.'#cdata-section'
+              if (-not $res) { $res = $t.RESULT }
+              Write-Host ("{0,-8} {1}" -f $res, $t.NAME)
+              if ($res -eq "FAIL") { $t.MESSAGES.MESSAGE | ForEach-Object { Write-Host "         $($_.TEXT)" } }
+            }
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Harfix-msix
+          path: |
+            desktop/msix/out/*.msix
+            wack.xml
+          if-no-files-found: error
+
+      # Optional: send the package to Partner Center as a new submission of Harfix.
+      # Needs an Azure AD app linked in Partner Center (Account settings → User management →
+      # Azure AD applications) and these repository secrets: STORE_TENANT_ID, STORE_SELLER_ID,
+      # STORE_CLIENT_ID, STORE_CLIENT_SECRET. The first submission is made by hand.
+      - name: Microsoft Store CLI
+        if: inputs.publish
+        uses: microsoft/setup-msstore-cli@v1
+      - name: Send to the Microsoft Store
+        if: inputs.publish
+        shell: pwsh
+        env:
+          TENANT: ${{ secrets.STORE_TENANT_ID }}
+          SELLER: ${{ secrets.STORE_SELLER_ID }}
+          CLIENT: ${{ secrets.STORE_CLIENT_ID }}
+          SECRET: ${{ secrets.STORE_CLIENT_SECRET }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:TENANT) { throw "STORE_* secrets are not set" }
+          if ((Get-ChildItem desktop/msix/out/*.msix).Name -like "*-TEST.msix") { throw "identity.json is empty: TEST package" }
+          msstore reconfigure --tenantId $env:TENANT --sellerId $env:SELLER --clientId $env:CLIENT --clientSecret $env:SECRET
+          msstore publish desktop/msix/out -i (Get-ChildItem desktop/msix/out/*.msix).FullName -id 9N1B1ZZ8ML2K

@@ -17,7 +17,6 @@ o‘girish, `convert_to`, `TARGETS`). U `harfix.js` bilan 3 128 ta misolda × 3 
 | Nima | Vazifasi |
 |---|---|
 | `installer/make_bundle.py`, `installer/harfix.iss`, `build.bat` | Python runtime + ilovani yig‘ib, Inno Setup o‘rnatuvchisini yasash |
-| `msix/` (`AppxManifest`, `listing.py`, `STORE.md`) | Microsoft Store paketi va Store matni |
 | `tests/` | desktop testlari |
 | `core/tests/cases_old.json`, `cases_cyr.json` | eski lotin / kirill uchun umumiy testlar |
 
@@ -30,8 +29,23 @@ O‘rnatilgan ilovaning tuzilishi (`harfix_desktop/paths.py` dan):
 <o‘rnatilgan papka>/harfix.ico
 ```
 
-Microsoft Store: mahsulot ID `9N1B1ZZ8ML2K`. MSIX paketini qayta yig‘ish uchun kerakli Identity
-(Name, Publisher) Partner Center → Harfix → **Product identity** sahifasida turadi.
+## Microsoft Store (MSIX)
+
+Mahsulot ID `9N1B1ZZ8ML2K`. `msix/` papkasi 17.11.2026 da qayta yozildi (asli o‘rnatuvchiga kirmagan):
+
+| Fayl | Nima |
+|---|---|
+| `msix/build_msix.py` | Paketni yig‘adi: Python 3.12 embeddable + `requirements-store.txt` + ilova → `.msix` |
+| `msix/AppxManifest.xml` | Paket tavsifi (startup task `HarfixStartup`, `runFullTrust`) |
+| `msix/identity.json` | Partner Center → Product identity dagi Name / Publisher (**to‘ldirilishi kerak**) |
+| `msix/Assets/` | Plitka va Store ikonalari (`make_assets.mjs` — `ui/icon.svg` dan) |
+| `msix/smoke_test.py` | Paketdagi Python’ni tekshiradi (importlar, .NET, fayl o‘girish) |
+| `msix/STORE.md` | Store’ga yuborish qadamlari va Store sahifasi matnlari |
+| `msix/store/` | Store uchun ekran rasmlari (1366×768) |
+
+GitHub Actions’dagi **msix** workflow har push’da paketni yig‘adi, Windows’ga o‘rnatib ishga tushiradi va
+Windows App Certification Kit’dan o‘tkazadi; tayyor `.msix` — run’ning Artifacts bo‘limida.
+Batafsil: [msix/STORE.md](msix/STORE.md).
 
 ## Manbadan ishga tushirish (Windows)
 
