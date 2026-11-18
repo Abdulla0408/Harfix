@@ -6,6 +6,11 @@ Store versiyasining afzalligi: paketni Microsoft o‘zi imzolaydi, shuning uchun
 va Smart App Control («An Application Control policy has blocked this file») ogohlantirishlari chiqmaydi,
 yangilanishlar Store orqali o‘zi keladi.
 
+**Holati (18.11.2026):** 1.2.1.0 sertifikatsiyaga qayta yuborilgan. Birinchi yuborish 13.11 da
+rad etilgan edi (10.1.1.3 Inaccurate Representation): skrinshotlar ilovadan to‘g‘ridan-to‘g‘ri olinmagan,
+ya’ni interfeys brauzerda chizilgan edi. Endi [`store/`](store) dagi rasmlar o‘rnatilgan Harfix’ning
+haqiqiy oynasidan olingan (pastda, «Skrinshotlar»).
+
 ## 1. Bir marta: paket identifikatori
 
 Partner Center → Harfix → **Product management → Product identity** sahifasidagi uchta qiymatni
@@ -52,7 +57,7 @@ Harfix → **Start your submission** (yoki **Update**):
 3. **Age ratings** — IARC so‘rovnomasi: «Utility, productivity…» turi, hamma savolga *No* → 3+.
 4. **Packages** — `Harfix-1.2.1.0.msix` ni tashlang. «Windows 10/11 Desktop» belgilangan bo‘lsin.
 5. **Store listings** — til: **Uzbek (Latin)** (paket shu tilda: `uz-Latn`). Matnlar pastda, rasmlar
-   [`store/`](store) papkasida (1366×768).
+   [`store/`](store) papkasida (1707×960, ilova oynasining o‘zi).
 6. **Submission options** — *Restricted capabilities* va *Notes for certification* ga pastdagi
    inglizcha matnni qo‘ying.
 7. **Submit to the Store.** Tekshiruv odatda 1–3 kun.
@@ -94,17 +99,40 @@ Harfix → **Start your submission** (yoki **Update**):
 **Search terms** (7 tagacha): `yangi alifbo`, `oʻzbek lotin`, `kirill lotin`, `ö ğ ş ç`, `uzbek alphabet`,
 `transliteratsiya`, `Harfix`
 
-**Screenshots:** `store/1-matn.png`, `store/2-fayllar.png`, `store/3-alifbo.png`, `store/4-sozlamalar.png`.
+**Screenshots** (izohi bilan):
+
+| Fayl | Izoh |
+|---|---|
+| `store/1-matn.png` | Matnni oʻgirish: lotin va kirill matn yangi alifboda |
+| `store/2-fayllar.png` | Fayllar: Word, Excel, PowerPoint, PDF va txt |
+| `store/3-alifbo.png` | Alifbo: yangi harflar va qoidalar |
+| `store/4-sozlamalar.png` | Sozlamalar: yozayotganda oʻgirish va tezkor tugmalar |
+
+### Skrinshotlar
+
+Store faqat ilovaning **o‘zidan olingan** rasmlarni qabul qiladi: brauzerda chizilgan interfeys yoki maket
+rad etiladi (10.1.1.3). Rasmlarni qayta olish (Windows, Harfix o‘rnatilgan bo‘lsin, Python 3.10+):
+
+```bat
+py desktop\msix\capture_screenshots.py
+```
+
+Skript ishlab turgan Harfix’ni yopadi, uni WebView2 masofaviy sozlash porti bilan (faqat 127.0.0.1) qayta ochadi,
+har bir sahifani to‘ldirib, oynani sarlavha paneli bilan `PrintWindow` orqali rasmga oladi (125% masshtabda
+1707×960), so‘ng Harfix’ni yana soat yonida oddiy holda ishga tushiradi. Rasmlar `store/` ga yoziladi.
+Kompyuter qaysi mavzuda bo‘lsa (qorong‘i/yorug‘), rasmlar ham shunday chiqadi.
 
 ## 5. Tekshiruvchilar uchun (inglizcha)
 
 **Restricted capabilities → runFullTrust:**
 
-> Harfix is a desktop (Win32) app; the package carries its own Python runtime. It needs runFullTrust to
-> (1) install a low-level keyboard hook so letters typed in other apps are converted to the new Uzbek
-> alphabet as the user types, (2) read the user's selected text (UI Automation / clipboard) when the user
-> presses Ctrl+Shift+H and replace it, and (3) read and write the documents the user chooses for batch
-> conversion. Keystrokes are never stored or sent anywhere; password fields are skipped.
+Maydon 500 belgigacha qabul qiladi; 18.11.2026 da yuborilgani:
+
+> Harfix is a Win32 desktop app (Python, packaged as MSIX). Full trust is needed to convert text as the user
+> types in other programs (low-level keyboard hook + SendInput, switched on by the user), to convert selected
+> text on Ctrl+Shift+H (UI Automation/clipboard), to read and write the files the user picks (and start the
+> user's own LibreOffice for old .doc/.xls/.ppt), and to start with Windows via its startup task. No sign-in.
+> Keystrokes and files are never stored or sent; password fields skipped.
 
 **Notes for certification:**
 
@@ -136,5 +164,6 @@ Birinchi yuborish qo‘lda qilinadi. Keyingilarini GitHub’dan bir tugma bilan 
 | Version must be higher | `VERSION` ni oshiring (1.2.1 → 1.2.2) |
 | Listing language not in package | Store listing **Uzbek (Latin)** bo‘lsin |
 | Restricted capability runFullTrust | 5-bo‘limdagi izohni yozing |
+| 10.1.1.3 Inaccurate Representation (Screenshots) | Rasmlar ilovaning o‘zidan olinmagan — `capture_screenshots.py` bilan qayta oling |
 | Privacy policy required | Properties’da `https://harfix.uz/maxfiylik/` |
 | App updates outside the Store | Store versiyasi «Yangi versiya — yuklab olish» xabarini ko‘rsatmaydi (`online.py`, `store=True`) |
