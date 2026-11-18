@@ -52,6 +52,7 @@ class KeyboardShotTest {
         shot("6-more", Layouts.more(latin, false))
         shot("7-numbers", Layouts.numbers(false))
         shot("8-phone", Layouts.numbers(true))
+        shot("13-numpad", Layouts.numpad(), toolbar = true)
     }
 
     @Test
