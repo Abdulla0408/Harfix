@@ -135,6 +135,15 @@
         <label class="set"><div><b data-t="Yozayotganda oʻgirish"></b>
           <p class="hint" data-t="Parol, e-mail va sayt manzili maydonlarida ishlamaydi."></p></div>
           <span class="switch"><input type="checkbox" data-set="live"><span></span></span></label>
+        <label class="set"><div><b data-t="Takliflar va avto-tuzatish"></b>
+          <p class="hint" data-t="Tepada 3 ta soʻz chiqadi. Harfix ishonchi komil boʻlsa, xato soʻz boʻsh joy bosilganda tuzatiladi. Darhol ⌫ — qaytadi. Lugʻat: Vikipediya matnlari asosida (CC BY-SA 4.0)."></p></div>
+          <span class="switch"><input type="checkbox" data-set="autocorrect"><span></span></span></label>
+        <label class="set"><div><b data-t="Chizib yozish"></b>
+          <p class="hint" data-t="Barmoqni harflar ustidan uzmasdan yurgizing — soʻz oʻzi yoziladi. s, o, g, c ustidan oʻtsangiz ş, ö, ğ, ç li soʻzlar ham chiqadi."></p></div>
+          <span class="switch"><input type="checkbox" data-set="glide"><span></span></span></label>
+        <label class="set"><div><b data-t="Soʻzlarni oʻrganish"></b>
+          <p class="hint" data-t="Lugʻatda yoʻq soʻzlaringizni faqat shu telefonda eslab qoladi, hech qayerga yuborilmaydi. Oʻchirilsa, oʻrganilgan soʻzlar ham oʻchadi."></p></div>
+          <span class="switch"><input type="checkbox" data-set="learn"><span></span></span></label>
         <label class="set"><div><b data-t="Tebranish"></b></div>
           <span class="switch"><input type="checkbox" data-set="vibrate"><span></span></span></label>
         <label class="set"><div><b data-t="Tovush"></b></div>
@@ -143,6 +152,20 @@
           <span class="switch"><input type="checkbox" data-set="lang_ru"><span></span></span></label>
         <label class="set"><div><b>Ўзбекча (кирилл)</b><p class="hint" data-t="Oʻzbek kirill klaviaturasi"></p></div>
           <span class="switch"><input type="checkbox" data-set="lang_uz_cyrl"><span></span></span></label>
+        <label class="set"><div><b data-t="Skrinshotlar buferda"></b>
+          <p class="hint" data-t="Skrinshot olishingiz bilan u klaviatura buferida turadi: bir bosishda yoki «Qoʻyish» bilan yuborasiz. Rasmlarni koʻrish ruxsati soʻraladi; rasmlar telefondan chiqmaydi."></p></div>
+          <span class="switch"><input type="checkbox" data-set="shots"><span></span></span></label>
+        <div class="set"><div><b data-t="Klaviatura foni"></b>
+          <p class="hint" data-t="Telefoningizdagi rasm klaviatura orqasida turadi. Boshqa mavzular: klaviatura menyusi → Mavzu (Lojuvard, Shafaq, Tun)."></p></div>
+          <div class="bg-buttons"><button class="btn small" id="bg-pick" data-t="Rasm tanlash"></button>
+            <button class="btn small" id="bg-clear" data-t="Olib tashlash" hidden></button></div></div>
+      </div>
+      <div class="card" id="dict-card">
+        <h3 data-t="Shaxsiy lugʻat"></h3>
+        <p class="hint" data-t="Lugʻatda yoʻq soʻzlaringiz: klaviatura ularni tuzatmaydi va taklif qiladi. Yozayotganda tepada chiqadigan «＋ soʻz» ni bosib ham qoʻshasiz."></p>
+        <form id="dict-form" class="dict-form"><input id="dict-input" type="text" autocomplete="off" spellcheck="false" maxlength="30">
+          <button class="btn small primary" data-t="Qoʻshish"></button></form>
+        <div id="dict-list" class="chips"></div>
       </div>
       <div class="card">
         <h3 data-t="Qulayliklar"></h3>
@@ -150,13 +173,15 @@
       </div>
       <div class="card settings">
         <h3 data-t="🔒 Maxfiylik"></h3>
-        <p class="hint" data-t="Yozganlaringiz va fayllaringiz hech qayerga yuborilmaydi va saqlanmaydi — hammasi telefonning oʻzida bajariladi. Internet boʻlsa, ilova yangiliklarni tekshiradi. Reklama koʻrsatilganda Yandex reklama xizmati qurilma haqidagi maʼlumotlarni (reklama identifikatori, IP manzil, qurilma modeli) oladi."></p>
+        <p class="hint" data-t="Yozganlaringiz va fayllaringiz hech qayerga yuborilmaydi va saqlanmaydi — hammasi telefonning oʻzida bajariladi. Faqat «Soʻzlarni oʻrganish» yoqilgan boʻlsa, klaviatura lugʻatda yoʻq soʻzlarni shu telefonda eslab qoladi. Internet boʻlsa, ilova yangiliklarni tekshiradi. Reklama koʻrsatilganda Yandex reklama xizmati qurilma haqidagi maʼlumotlarni (reklama identifikatori, IP manzil, qurilma modeli) oladi."></p>
         <label class="set"><div><b data-t="Anonim statistika"></b>
           <p class="hint" data-t="Kuniga bir marta faqat «Harfix ishlatildi» belgisi yuboriladi: tasodifiy raqam va versiya. Ism, telefon raqami, matn yuborilmaydi."></p></div>
           <span class="switch"><input type="checkbox" data-set="stats"><span></span></span></label>
         <label class="set"><div><b data-t="Bildirishnomalar"></b>
           <p class="hint" data-t="Eʼlonlar, yangi versiya va «Odatiy klaviaturada» oʻchib qolsa. Reklama yuborilmaydi."></p></div>
           <span class="switch"><input type="checkbox" data-set="notify"><span></span></span></label>
+        <p><button class="btn" id="feedback" data-t="💬 Taklif va shikoyatlar"></button></p>
+        <p class="hint" data-t="Telegram orqali yozing: @a33208"></p>
         <p><button class="link" id="privacy" data-t="Maxfiylik siyosati"></button></p>
         <p class="hint" id="app-version"></p>
       </div>
@@ -231,6 +256,26 @@
         <button class="btn" id="words-cancel" data-t="Bekor qilish"></button>
         <button class="btn primary" id="words-agree" data-t="Roziman, davom etish"></button>
       </div>
+    </div>
+  </div>
+
+  <!-- Until the Harfix keyboard is chosen: invite to switch it on -->
+  <div class="modal" id="kbd-onboard" hidden role="dialog" aria-modal="true" aria-labelledby="onboard-title">
+    <div class="sheet">
+      <h2 id="onboard-title" data-t="Harfix klaviaturasini yoqing"></h2>
+      <p data-t="Yangi alifboda yozishning eng oson yoʻli:"></p>
+      <ul class="rules">
+        <li data-t="Tepada ö ğ ş ç harflari tayyor turadi, eski yozuv esa yozilishi bilan yangisiga oʻzi almashadi."></li>
+        <li data-t="Xato soʻzlarni oʻzi tuzatadi va soʻz taklif qiladi."></li>
+        <li data-t="Barmoqni harflar ustidan yurgizib yozish, bufer, matnni tahrirlash."></li>
+      </ul>
+      <div class="step" id="ob-step1"><span class="num">1</span>
+        <div class="grow"><b data-t="Yoqing"></b><div class="hint" data-t="Roʻyxatda «Harfix klaviaturasi»ni yoqing."></div></div>
+        <button class="btn small primary" id="ob-enable" data-t="Yoqish"></button></div>
+      <div class="step" id="ob-step2"><span class="num">2</span>
+        <div class="grow"><b data-t="Tanlang"></b><div class="hint" data-t="Harfix klaviaturasini asosiy qilib tanlang."></div></div>
+        <button class="btn small" id="ob-choose" data-t="Tanlash"></button></div>
+      <div class="sheet-actions"><button class="btn" id="ob-later" data-t="Keyinroq"></button></div>
     </div>
   </div>
 

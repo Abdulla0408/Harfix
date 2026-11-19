@@ -29,6 +29,7 @@ import android.widget.Toast
 import android.window.OnBackInvokedDispatcher
 import org.json.JSONArray
 import org.json.JSONObject
+import uz.harfix.app.keyboard.ClipImages
 import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -209,10 +210,88 @@ class MainActivity : Activity() {
         }
     }
 
+    // --- keyboard: screenshots in the clipboard panel ------------------------------------------
+
+    /** "Skrinshotlar buferda": the keyboard needs the photos permission to see new screenshots. */
+    fun askShots() {
+        @Suppress("DEPRECATION")
+        getSharedPreferences("harfix", Context.MODE_MULTI_PROCESS).edit().putBoolean("shots", true).apply()
+        if (checkSelfPermission(ClipImages.PERMISSION) == PackageManager.PERMISSION_GRANTED) {
+            if (pageReady) sendState()
+            return
+        }
+        requestPermissions(arrayOf(ClipImages.PERMISSION), REQ_SHOTS)
+    }
+
+    // --- keyboard background ------------------------------------------------------------------
+
+    /** The picture behind the keyboard (the keyboard reads it from here). */
+    fun keyboardBackground() = java.io.File(filesDir, "keyboard_bg.jpg")
+
+    /** Opens the system photo picker (no photo permission needed). */
+    fun pickBackground() {
+        val i = if (Build.VERSION.SDK_INT >= 33) {
+            Intent(android.provider.MediaStore.ACTION_PICK_IMAGES)
+        } else {
+            Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
+        }
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(i, REQ_BG)
+        } catch (_: ActivityNotFoundException) {
+            toast(t("Rasm tanlash oynasi topilmadi"))
+        }
+    }
+
+    /** Saves the chosen picture, upright and at most 1280 px, and switches the keyboard to it. */
+    private fun saveBackground(uri: Uri) {
+        val ok = try {
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1280) sample *= 2
+            val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+            var bmp = contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, opts) }
+                ?: throw IOException("not a picture")
+            val turn = try {
+                contentResolver.openInputStream(uri)?.use {
+                    when (android.media.ExifInterface(it).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1)) {
+                        android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                        android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                        android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                        else -> 0f
+                    }
+                } ?: 0f
+            } catch (_: Exception) {
+                0f
+            }
+            val scale = minOf(1f, 1280f / maxOf(bmp.width, bmp.height))
+            if (turn != 0f || scale < 1f) {
+                val m = android.graphics.Matrix().apply { postScale(scale, scale); postRotate(turn) }
+                bmp = android.graphics.Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+            }
+            val tmp = java.io.File(filesDir, "keyboard_bg.tmp")
+            tmp.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
+            if (!tmp.renameTo(keyboardBackground())) throw IOException("rename")
+            @Suppress("DEPRECATION")
+            getSharedPreferences("harfix", Context.MODE_MULTI_PROCESS).edit().putInt("theme", Bridge.PHOTO_THEME).apply()
+            true
+        } catch (_: Throwable) {
+            false
+        }
+        toast(t(if (ok) "Klaviatura foni oʻrnatildi" else "Bu rasmni ochib boʻlmadi"))
+        runOnUiThread { if (pageReady) sendState() }
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_BG) {
+            val uri = data?.data
+            if (resultCode == RESULT_OK && uri != null) worker.execute { saveBackground(uri) }
+            return
+        }
         if (requestCode != REQ_PICK || resultCode != RESULT_OK || data == null) return
         val uris = ArrayList<Uri>()
         val clip = data.clipData
@@ -296,6 +375,11 @@ class MainActivity : Activity() {
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
         intent.getStringExtra("harfix_open")?.let { send(JSONObject().put("kind", "open").put("tab", it)) }
+        if (intent.getStringExtra("harfix_action") == "shots") {
+            intent.removeExtra("harfix_action")
+            send(JSONObject().put("kind", "open").put("tab", "keyboard"))
+            askShots()
+        }
         val uris = ArrayList<Uri>()
         when (intent.action) {
             Intent.ACTION_SEND -> {
@@ -355,6 +439,16 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_NOTIFY && pageReady) sendState()
+        if (requestCode == REQ_SHOTS) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                toast(t("Tayyor: endi skrinshotlar klaviatura buferida turadi"))
+            } else if (!shouldShowRequestPermissionRationale(ClipImages.PERMISSION)) {
+                // "don't ask again": only Android settings can give it now
+                toast(t("Sozlamalar → Ruxsatlar → Rasmlar: ruxsat bering"))
+                start(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
+            }
+            if (pageReady) sendState()
+        }
     }
 
     override fun onDestroy() {
@@ -367,6 +461,8 @@ class MainActivity : Activity() {
     companion object {
         const val REQ_PICK = 7
         const val REQ_NOTIFY = 8
+        const val REQ_BG = 9
+        const val REQ_SHOTS = 10
         /** 60 MB */
         const val MAX_FILE = 62_914_560L
     }

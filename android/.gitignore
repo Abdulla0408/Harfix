@@ -8,4 +8,6 @@ local.properties
 keystore.properties
 *.jks
 *.keystore
+# except the fixed key of the test (debug) builds: not secret, see app/build.gradle.kts
+!app/debug.keystore
 /dist/

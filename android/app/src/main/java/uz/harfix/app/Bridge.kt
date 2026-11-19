@@ -12,11 +12,18 @@ import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
 import org.json.JSONArray
 import org.json.JSONObject
+import uz.harfix.app.keyboard.UserWords
+import java.io.File
 
 /** window.HarfixAndroid: what the web page (assets/ui) can ask the phone to do. */
 class Bridge(private val a: MainActivity) {
 
-    private fun prefs(): SharedPreferences = a.getSharedPreferences("harfix", 0)
+    // the keyboard (":keyboard" process) writes here too: reload when the file changed
+    @Suppress("DEPRECATION")
+    private fun prefs(): SharedPreferences = a.getSharedPreferences("harfix", android.content.Context.MODE_MULTI_PROCESS)
+
+    private fun userWords() = UserWords(File(a.filesDir, UserWords.FILE), File(a.filesDir, UserWords.DICT_FILE))
+        .also { it.load(); it.loadDictionary() }
 
     @JavascriptInterface
     fun ready() = a.runOnUiThread { a.onPageReady() }
@@ -39,6 +46,10 @@ class Bridge(private val a: MainActivity) {
             .put("lang_uz_cyrl", p.getBoolean("lang_uz_cyrl", true))
             .put("words", p.getBoolean("words", true))
             .put("words_live", p.getBoolean("words_live", true))
+            .put("autocorrect", p.getBoolean("autocorrect", true))
+            .put("glide", p.getBoolean("glide", true))
+            .put("learn", p.getBoolean("learn", true))
+            .put("shots", p.getBoolean("shots", true) && uz.harfix.app.keyboard.ClipImages.canReadShots(a))
             .put("stats", p.getBoolean("stats", true))
             .put("notify", notify)
             .put("quiz_best", p.getInt("quiz_best", 0))
@@ -54,6 +65,7 @@ class Bridge(private val a: MainActivity) {
             .put("words_available", Words.available(a))
             .put("words_ok", p.getBoolean("words_ok", false))
             .put("restricted", restricted)
+            .put("keyboard_bg", a.keyboardBackground().exists())
             .toString()
     }
 
@@ -61,12 +73,16 @@ class Bridge(private val a: MainActivity) {
     fun set(key: String, value: String) {
         val e = prefs().edit()
         when (key) {
-            "live", "sound", "vibrate", "lang_ru", "lang_uz_cyrl", "words", "words_live", "stats" ->
+            "live", "sound", "vibrate", "lang_ru", "lang_uz_cyrl", "words", "words_live", "stats",
+            "autocorrect", "glide", "learn", "shots" ->
                 e.putBoolean(key, value == "true")
             "target" -> e.putString(key, value)
         }
         e.apply()
         if (key == "words") Words.refreshTile(a)
+        if (key == "shots" && value == "true") a.runOnUiThread { a.askShots() }
+        // the keyboard's learned words live only on the phone; switching learning off deletes them
+        if (key == "learn" && value != "true") java.io.File(a.filesDir, "user_words.txt").delete()
         if (key == "stats" && value == "true") {
             Online.nextTouch = 0
             Online.touch(a)
@@ -149,6 +165,27 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** The user's own dictionary, newest first (the keyboard does not correct these words and suggests them). */
+    @JavascriptInterface
+    fun userDict(): String = JSONArray(userWords().dictionary().reversed()).toString()
+
+    /** Adds a word typed in the app (in the new alphabet, as the keyboard writes); false if it is not a word. */
+    @JavascriptInterface
+    fun addUserWord(word: String): Boolean = userWords().add(Converter.convert(word.trim(), "new"))
+
+    @JavascriptInterface
+    fun removeUserWord(word: String) = userWords().remove(word)
+
+    /** Picks a picture from the phone for the keyboard's background (theme "Rasm"). */
+    @JavascriptInterface
+    fun pickKeyboardBackground() = a.runOnUiThread { a.pickBackground() }
+
+    @JavascriptInterface
+    fun clearKeyboardBackground() {
+        a.keyboardBackground().delete()
+        if (prefs().getInt("theme", 0) == PHOTO_THEME) prefs().edit().putInt("theme", 0).apply()
+    }
+
     @JavascriptInterface
     fun saveQuiz(score: Int): Int {
         val best = maxOf(score, prefs().getInt("quiz_best", 0))
@@ -195,4 +232,9 @@ class Bridge(private val a: MainActivity) {
 
     @JavascriptInterface
     fun hideBanner() = a.runOnUiThread { if (!a.isDestroyed) a.ads.reset() }
+
+    companion object {
+        /** The keyboard's "theme" step that shows the picture (KeyboardTheme.NAMES: "Rasm"). */
+        val PHOTO_THEME = uz.harfix.app.keyboard.KeyboardTheme.NAMES.size - 1
+    }
 }

@@ -1,17 +1,21 @@
 package uz.harfix.app.keyboard
 
-enum class KeyKind { CHAR, NEW_LETTER, SHIFT, BACKSPACE, ENTER, SPACE, SYMBOLS, MORE_SYMBOLS, LETTERS, LANG, GLOBE, SPACER }
+enum class KeyKind { CHAR, NEW_LETTER, SHIFT, BACKSPACE, ENTER, SPACE, SYMBOLS, MORE_SYMBOLS, LETTERS, LANG, GLOBE, SPACER, ACTION, NUMPAD }
 
 enum class Shift { OFF, ON, LOCKED }
 
 enum class EnterIcon { NEWLINE, GO, SEARCH, SEND, NEXT, DONE }
 
-/** One key: [label] is also the text it types; [alts] pop up on a long press. */
+/**
+ * One key: [label] is also the text it types; [alts] pop up on a long press. An ACTION key (the
+ * panels: menu, text editing, clipboard) runs [action] instead of typing.
+ */
 data class Key(
     val label: String,
     val kind: KeyKind = KeyKind.CHAR,
     val width: Float = 1f,
     val alts: List<String> = emptyList(),
+    val action: String = "",
 ) {
     val text: String get() = label
 }
@@ -55,9 +59,12 @@ object Layouts {
     /** The top strip of big letter keys (ö ğ ş ç for Latin). */
     private fun strip(letters: List<String>) = Row(letters.map { Key(it, KeyKind.NEW_LETTER, 2.5f) }, 0.82f)
 
-    /** ⇧ + letters + ⌫ */
+    /** A small gap: keeps a finger aiming at M (or Z) off ⌫ (or ⇧). */
+    private val GAP = Key("", KeyKind.SPACER, 0.25f)
+
+    /** ⇧ + letters + ⌫, with a gap on both sides so the letters keep their full width. */
     private fun shiftRow(line: String, alts: Map<String, List<String>>) =
-        Row(listOf(Key("⇧", KeyKind.SHIFT, 1.5f)) + keys(line, alts) + Key("⌫", KeyKind.BACKSPACE, 1.5f))
+        Row(listOf(Key("⇧", KeyKind.SHIFT, 1.25f), GAP) + keys(line, alts) + GAP + Key("⌫", KeyKind.BACKSPACE, 1.25f))
 
     /** ?123 , [🌐] [next language] space . ⏎ */
     fun bottomRow(next: String?, globe: Boolean): Row {
@@ -119,13 +126,14 @@ object Layouts {
         else -> latin(next, globe)
     }
 
-    /** ABC , [🌐] space . ⏎ (space is wider without the globe key) */
+    /** ABC , [🌐] number pad, space . ⏎ (space is wider without the globe key) */
     private fun symbolsBottom(left: String, right: String, globe: Boolean): Row {
         val k = ArrayList<Key>()
         k.add(Key("ABC", KeyKind.LETTERS, 1.5f))
         k.add(Key(left))
         if (globe) k.add(Key("🌐", KeyKind.GLOBE))
-        k.add(Key(" ", KeyKind.SPACE, if (globe) 4.5f else 5.5f))
+        k.add(Key("", KeyKind.NUMPAD))
+        k.add(Key(" ", KeyKind.SPACE, if (globe) 3.5f else 4.5f))
         k.add(Key(right))
         k.add(Key("⏎", KeyKind.ENTER, 1.5f))
         return Row(k)
@@ -159,6 +167,23 @@ object Layouts {
         false,
     )
 
+    /**
+     * The number pad from ?123. Its rows are groups that the view lays out as a pad: [0] the
+     * arithmetic column on the left, [1] the digits 1-9, [2] % space ⌫ on the right, [3] the
+     * bottom row. The heights add up to the letters' height (only the digits and bottom count).
+     */
+    fun numpad() = Layout(
+        "numpad",
+        listOf(
+            Row(listOf(Key("+", alts = listOf("±")), Key("-", alts = listOf("_")), Key("*", alts = listOf("×")), Key("/", alts = listOf("÷"))), 0f),
+            Row(keys("1 2 3 4 5 6 7 8 9"), 3.9f),
+            Row(listOf(Key("%", alts = listOf("‰")), Key(" ", KeyKind.SPACE), Key("⌫", KeyKind.BACKSPACE)), 0f),
+            Row(listOf(Key("ABC", KeyKind.LETTERS), Key(","), Key("!?#", KeyKind.SYMBOLS), Key("0"), Key("="), Key("."), Key("⏎", KeyKind.ENTER)), 0.92f),
+        ),
+        "",
+        false,
+    )
+
     /** Number fields; [phone] adds + * # ( instead of - space , . */
     fun numbers(phone: Boolean) = Layout(
         "numbers",
@@ -171,4 +196,73 @@ object Layouts {
         "",
         false,
     )
+
+    // --- panels: opened from the toolbar above the keys --------------------------------------
+
+    /** Panel layouts (not letters): the toolbar shows ✕ to close them. */
+    val PANELS = setOf("menu", "edit", "clipboard")
+
+    private fun act(label: String, action: String, width: Float = 1f) = Key(label, KeyKind.ACTION, width, action = action)
+
+    /** Panels are as tall as the letters (0.82 + 4 rows), so the keyboard does not jump. */
+    private const val PANEL_HEIGHT = 4.82f
+    private const val PANEL_ROW = PANEL_HEIGHT / 4
+    private const val CLIP_ROW = (PANEL_HEIGHT - 1f) / 5
+
+    /** The menu: what the keyboard can do besides typing; [theme] is the current theme's name. */
+    fun menu(theme: String = "") = Layout(
+        "menu",
+        listOf(
+            Row(listOf(act("🌐  Keyingi til", "lang"), act("✋  Bir qöl", "onehand")), PANEL_ROW),
+            Row(listOf(act(if (theme.isEmpty()) "🎨  Mavzu" else "🎨  Mavzu: $theme", "theme"), act("✍️  Tahrirlaş", "edit")), PANEL_ROW),
+            Row(listOf(act("🔤  Ögiriş", "convert"), act("📋  Bufer", "clipboard")), PANEL_ROW),
+            Row(listOf(act("↕️  Ölçam", "resize"), act("⚙️  Sozlamalar", "settings")), PANEL_ROW),
+        ),
+        "",
+        false,
+    )
+
+    /** Text editing: move the cursor, select, copy, cut, paste. [selecting]: arrows extend the selection. */
+    fun edit(selecting: Boolean) = Layout(
+        "edit",
+        listOf(
+            Row(listOf(act("Hammasi", "edit:all"), act("Nusxa", "edit:copy"), act("Kesiş", "edit:cut"), act("Qöyiş", "edit:paste")), PANEL_ROW),
+            Row(listOf(act("⇤", "edit:home"), act("▲", "edit:up"), act("⇥", "edit:end")), PANEL_ROW),
+            Row(listOf(act("◀", "edit:left"), act(if (selecting) "✓ Tanlaş" else "Tanlaş", "edit:select"), act("▶", "edit:right")), PANEL_ROW),
+            Row(listOf(act("ABC", "back"), act("▼", "edit:down"), Key("⌫", KeyKind.BACKSPACE)), PANEL_ROW),
+        ),
+        "",
+        false,
+    )
+
+    /** Recently copied texts (newest first); a tap types one. */
+    /** How many pictures the clipboard panel shows (keys "img:0"...). */
+    const val CLIP_IMAGES = 3
+
+    /**
+     * The clipboard panel: the newest [images] pictures (screenshots, "Rasm qöşiş") on top, then
+     * the copied texts; [offerShots] asks to switch screenshots on.
+     */
+    fun clipboard(clips: List<String>, images: Int = 0, offerShots: Boolean = false): Layout {
+        val rows = ArrayList<Row>()
+        val room = PANEL_HEIGHT - 1f
+        if (images > 0) {
+            rows.add(Row((0 until CLIP_IMAGES).map { if (it < images) act("", "img:$it") else Key("", KeyKind.SPACER) }, CLIP_ROW * 2))
+        }
+        if (offerShots) rows.add(Row(listOf(act("📷  Skrinşotlar ham şu yerda çiqsin", "shots:enable")), CLIP_ROW))
+        if (clips.isEmpty() && images == 0) {
+            rows.add(Row(listOf(act("Bufer böş: matn nusxalang yoki skrinşot oling", "back")), CLIP_ROW))
+        } else {
+            val fit = ((room - rows.sumOf { it.height.toDouble() }.toFloat()) / CLIP_ROW + 0.01f).toInt()
+            for ((i, clip) in clips.take(minOf(5, fit)).withIndex()) {
+                val oneLine = clip.replace('\n', ' ').trim()
+                rows.add(Row(listOf(act(if (oneLine.length > 38) oneLine.take(37) + "…" else oneLine, "paste:$i")), CLIP_ROW))
+            }
+        }
+        // empty space up to the letters' height
+        val used = rows.sumOf { it.height.toDouble() }.toFloat()
+        if (used < room - 0.01f) rows.add(Row(listOf(Key("", KeyKind.SPACER)), room - used))
+        rows.add(Row(listOf(act("ABC", "back"), act("🖼  Rasm qöşiş", "image:pick", 1.6f), act("Tozalaş", "clip:clear"))))
+        return Layout("clipboard", rows, "", false)
+    }
 }

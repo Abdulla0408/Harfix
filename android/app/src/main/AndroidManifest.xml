@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- "Skrinshotlar buferda" (asked only when switched on): the keyboard sees new screenshots -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <application
         android:allowBackup="true"
@@ -73,6 +78,23 @@
                 android:name="android.view.im"
                 android:resource="@xml/method" />
         </service>
+
+        <!-- "Rasm qöşiş" in the keyboard's clipboard panel: the system photo picker -->
+        <activity
+            android:name=".keyboard.PickImageActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:process=":keyboard"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Harfix.Translucent" />
+
+        <!-- lends the clipboard panel's pictures to the app the user types in -->
+        <provider
+            android:name=".keyboard.ClipProvider"
+            android:authorities="${applicationId}.clips"
+            android:exported="false"
+            android:grantUriPermissions="true"
+            android:process=":keyboard" />
 
         <service
             android:name=".NewsJob"
