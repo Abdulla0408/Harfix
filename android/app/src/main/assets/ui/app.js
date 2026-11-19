@@ -115,11 +115,26 @@
   document.querySelectorAll(".tab").forEach(function (b) {
     b.addEventListener("click", function () { showTab(b.dataset.tab); });
   });
-  // While typing, the tab bar would sit on top of the keyboard: hide it.
+  // While typing, the tab bar would sit on top of the keyboard: hide it. The keyboard can also be
+  // closed with Back while the field keeps focus; the page then grows back to its full height and
+  // the bar returns (it hides again when the keyboard reopens).
+  function textField(el) {
+    return !!el && el.matches && el.matches("textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit])");
+  }
   document.addEventListener("focusin", function (e) {
-    if (e.target.matches("textarea, input")) document.body.classList.add("typing");
+    if (textField(e.target)) document.body.classList.add("typing");
   });
   document.addEventListener("focusout", function () { document.body.classList.remove("typing"); });
+  var fullHeight = {}, keyboardOpen = false;
+  fullHeight[window.innerWidth] = window.innerHeight;
+  window.addEventListener("resize", function () {
+    var w = window.innerWidth, h = window.innerHeight;
+    if (!fullHeight[w] || h > fullHeight[w]) fullHeight[w] = h;
+    var open = h < fullHeight[w] - 120;
+    if (open === keyboardOpen) return;
+    keyboardOpen = open;
+    document.body.classList.toggle("typing", open && textField(document.activeElement));
+  });
 
   // Android Back: first back to the first tab, then the app closes
   window.harfixBack = function () {
