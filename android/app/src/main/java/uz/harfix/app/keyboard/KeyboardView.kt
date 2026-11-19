@@ -184,6 +184,19 @@ class KeyboardView(context: Context) : View(context) {
     private var photo: android.graphics.Bitmap? = null
     private val photoPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
+    /** Thumbnails for the clipboard panel's picture keys ("img:N"). */
+    private var thumbs: Map<String, android.graphics.Bitmap> = emptyMap()
+    private val thumbRect = RectF()
+    private val thumbDst = RectF()
+    private val thumbPath = Path()
+
+    fun setThumbs(map: Map<String, android.graphics.Bitmap>) {
+        if (map == thumbs) return
+        thumbs = map
+        baseDirty = true
+        invalidate()
+    }
+
     fun setPhoto(bitmap: android.graphics.Bitmap?) {
         if (bitmap === photo) return
         photo = bitmap
@@ -638,14 +651,39 @@ class KeyboardView(context: Context) : View(context) {
             KeyKind.GLOBE -> drawGlobe(c, cx, cy, s * 0.9f, color)
             KeyKind.NUMPAD -> drawNumpad(c, cx, cy, s, color)
             KeyKind.ACTION -> {
-                label.textSize = 15 * sp
-                val room = r.width() - 16 * density
-                val w = label.measureText(k.label)
-                val size = if (w > room) maxOf(10 * sp, 15 * sp * room / w) else 15 * sp
-                text(c, k.label, cx, cy, size, color, false)
+                val pic = thumbs[k.action]
+                if (pic != null) {
+                    drawThumb(c, pic, r, radius)
+                } else if (k.action.startsWith("img:")) {
+                    text(c, "🖼", cx, cy, 22 * sp, color, false)
+                } else {
+                    label.textSize = 15 * sp
+                    val room = r.width() - 16 * density
+                    val w = label.measureText(k.label)
+                    val size = if (w > room) maxOf(10 * sp, 15 * sp * room / w) else 15 * sp
+                    text(c, k.label, cx, cy, size, color, false)
+                }
             }
             else -> text(c, k.label, cx, cy, textSize(k, r), color, false)
         }
+    }
+
+    /** A picture filling the key, rounded; tall ones (screenshots) show their top. */
+    private fun drawThumb(c: Canvas, pic: android.graphics.Bitmap, r: RectF, radius: Float) {
+        val inset = 3 * density
+        thumbRect.set(r.left + inset, r.top + inset, r.right - inset, r.bottom - inset)
+        thumbPath.reset()
+        thumbPath.addRoundRect(thumbRect, radius - inset / 2, radius - inset / 2, Path.Direction.CW)
+        val scale = maxOf(thumbRect.width() / pic.width, thumbRect.height() / pic.height)
+        val w = pic.width * scale
+        val h = pic.height * scale
+        val left = thumbRect.centerX() - w / 2
+        val top = if (pic.height > pic.width * 1.3f) thumbRect.top else thumbRect.centerY() - h / 2
+        thumbDst.set(left, top, left + w, top + h)
+        c.save()
+        c.clipPath(thumbPath)
+        c.drawBitmap(pic, null, thumbDst, photoPaint)
+        c.restore()
     }
 
     /** The background and every key at rest: the part that changes only with the layout. */

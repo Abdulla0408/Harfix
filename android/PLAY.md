@@ -71,6 +71,22 @@ bilan solishtiring, SDK versiyasi o‘zgarganda ham):
 - Ma’lumot uzatishda shifrlanadimi: **Ha** (HTTPS).
 - O‘chirishni so‘rash mumkinmi: anonim hisob Sozlamalarda o‘chiriladi, bog‘lanish Telegram bot `/fikr` orqali.
 
+### Rasmlar ruxsati (`READ_MEDIA_IMAGES`)
+
+«Skrinshotlar buferda» uchun klaviatura yangi skrinshotlarni koʻrishi kerak. Play Console →
+App content → **Photo and video permissions** → *Declare*. Inglizcha matn:
+
+> Harfix Keyboard shows the screenshot the user has just taken in its clipboard panel and on the
+> clipboard, so it can be pasted into a chat in one tap (like the clipboard of other keyboards).
+> The permission is asked only when the user switches "Skrinshotlar buferda" on; the keyboard reads
+> only images in the Screenshots folder added in the last minute, keeps copies on the phone and
+> never uploads them. The system photo picker cannot do this, because it needs a user action for
+> every picture, and the point of the feature is that a new screenshot is ready without one.
+
+Data safety’da rasmlar **yigʻilmaydi** (faqat telefonda ishlanadi). Rad etilsa: ikkala
+`uses-permission` qatorini `src/main/AndroidManifest.xml` dan `src/direct/AndroidManifest.xml` ga
+koʻchiring. Play versiyasida «Rasm qoʻshish» (tizim rasm tanlagichi, ruxsatsiz) qoladi.
+
 ## 4. Accessibility API deklaratsiyasi (`play` flavor)
 
 Play Console → App content → **Accessibility API** → *Declare*. Inglizcha matn:

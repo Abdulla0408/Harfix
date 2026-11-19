@@ -19,12 +19,14 @@ class KeyboardShotTest {
     private fun shot(
         name: String, layout: Layout, shift: Shift = Shift.OFF, enter: EnterIcon = EnterIcon.NEWLINE,
         words: List<String>? = null, toolbar: Boolean = false, theme: Int = 0, photo: Bitmap? = null,
+        thumbs: Map<String, Bitmap>? = null,
     ) {
         val ctx = RuntimeEnvironment.getApplication()
         val v = KeyboardView(ctx)
         if (theme != 0) v.setLook(0, 1f, theme)
         if (photo != null) v.setPhoto(photo)
         v.setLayout(layout)
+        if (thumbs != null) v.setThumbs(thumbs)
         v.setShift(shift)
         v.setEnterIcon(enter)
         v.setSpaceLabel(layout.spaceLabel + if (layout.name == "latin") " ⚡" else "")
@@ -69,6 +71,30 @@ class KeyboardShotTest {
         shot("15-shafaq", latin, toolbar = true, theme = 4)
         shot("16-tun", Layouts.menu("Tun"), toolbar = true, theme = 5)
         shot("17-photo", latin, toolbar = true, theme = 6, photo = picture())
+    }
+
+    @Test
+    fun clipboardWithPictures() {
+        val texts = listOf("Salom, qalaysiz?", "https://harfix.uz", "Ertaga soat 10 da uçraşamiz")
+        val pics = mapOf("img:0" to screenshot(), "img:1" to picture())
+        shot("12b-clipboard-pictures", Layouts.clipboard(texts, 2, false), toolbar = true, thumbs = pics)
+        shot("12c-clipboard-offer", Layouts.clipboard(texts, 0, true), toolbar = true)
+        shot("12d-clipboard-pictures-lojuvard", Layouts.clipboard(emptyList(), 3, true), toolbar = true, theme = 3, thumbs = pics)
+    }
+
+    /** A made-up phone screenshot: a tall white screen with a title bar and some chat bubbles. */
+    private fun screenshot(): Bitmap {
+        val b = Bitmap.createBitmap(540, 1200, Bitmap.Config.ARGB_8888)
+        val c = Canvas(b)
+        val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        c.drawColor(0xFFECE5DD.toInt())
+        p.color = 0xFF075E54.toInt()
+        c.drawRect(0f, 0f, 540f, 110f, p)
+        p.color = 0xFFFFFFFF.toInt()
+        for (i in 0 until 6) c.drawRoundRect(30f, 150f + i * 160, 380f, 250f + i * 160, 24f, 24f, p)
+        p.color = 0xFFDCF8C6.toInt()
+        for (i in 0 until 6) c.drawRoundRect(200f, 230f + i * 160, 510f, 290f + i * 160, 24f, 24f, p)
+        return b
     }
 
     /** A made-up "photo": a sunset gradient with a few soft circles. */

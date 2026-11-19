@@ -29,6 +29,7 @@ import android.widget.Toast
 import android.window.OnBackInvokedDispatcher
 import org.json.JSONArray
 import org.json.JSONObject
+import uz.harfix.app.keyboard.ClipImages
 import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -209,6 +210,19 @@ class MainActivity : Activity() {
         }
     }
 
+    // --- keyboard: screenshots in the clipboard panel ------------------------------------------
+
+    /** "Skrinshotlar buferda": the keyboard needs the photos permission to see new screenshots. */
+    fun askShots() {
+        @Suppress("DEPRECATION")
+        getSharedPreferences("harfix", Context.MODE_MULTI_PROCESS).edit().putBoolean("shots", true).apply()
+        if (checkSelfPermission(ClipImages.PERMISSION) == PackageManager.PERMISSION_GRANTED) {
+            if (pageReady) sendState()
+            return
+        }
+        requestPermissions(arrayOf(ClipImages.PERMISSION), REQ_SHOTS)
+    }
+
     // --- keyboard background ------------------------------------------------------------------
 
     /** The picture behind the keyboard (the keyboard reads it from here). */
@@ -361,6 +375,11 @@ class MainActivity : Activity() {
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
         intent.getStringExtra("harfix_open")?.let { send(JSONObject().put("kind", "open").put("tab", it)) }
+        if (intent.getStringExtra("harfix_action") == "shots") {
+            intent.removeExtra("harfix_action")
+            send(JSONObject().put("kind", "open").put("tab", "keyboard"))
+            askShots()
+        }
         val uris = ArrayList<Uri>()
         when (intent.action) {
             Intent.ACTION_SEND -> {
@@ -420,6 +439,16 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_NOTIFY && pageReady) sendState()
+        if (requestCode == REQ_SHOTS) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                toast(t("Tayyor: endi skrinshotlar klaviatura buferida turadi"))
+            } else if (!shouldShowRequestPermissionRationale(ClipImages.PERMISSION)) {
+                // "don't ask again": only Android settings can give it now
+                toast(t("Sozlamalar → Ruxsatlar → Rasmlar: ruxsat bering"))
+                start(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
+            }
+            if (pageReady) sendState()
+        }
     }
 
     override fun onDestroy() {
@@ -433,6 +462,7 @@ class MainActivity : Activity() {
         const val REQ_PICK = 7
         const val REQ_NOTIFY = 8
         const val REQ_BG = 9
+        const val REQ_SHOTS = 10
         /** 60 MB */
         const val MAX_FILE = 62_914_560L
     }

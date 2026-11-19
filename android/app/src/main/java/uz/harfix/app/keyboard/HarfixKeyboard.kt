@@ -1,7 +1,13 @@
 package uz.harfix.app.keyboard
 
+import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
+import android.database.ContentObserver
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.provider.MediaStore
 import android.content.Intent
 import android.content.SharedPreferences
 import android.inputmethodservice.InputMethodService
@@ -18,6 +24,7 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputContentInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import uz.harfix.app.Converter
@@ -78,6 +85,13 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     /** Texts copied while the keyboard runs, newest first; kept in memory only, never saved or sent. */
     private val clips = ArrayList<String>()
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { rememberClip() }
+    /** Pictures in the clipboard panel (ClipImages), newest first, and their thumbnails by file name. */
+    private var images: List<File> = emptyList()
+    private val thumbs = HashMap<String, Bitmap>()
+    /** Sees new screenshots while "Skrinshotlar buferda" is on and the photos permission is given. */
+    private var shotObserver: ContentObserver? = null
+    @Volatile private var lastShot = -1L
+    private val checkShot = Runnable { takeShot() }
     /** Text-editing panel: the arrows extend the selection. */
     private var selecting = false
     private var oneHand = 0
@@ -90,6 +104,7 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
             getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
         } catch (_: Exception) {
         }
+        watchShots()
         user = UserWords(File(filesDir, UserWords.FILE), File(filesDir, UserWords.DICT_FILE))
         workerHandler.post {
             user.load()
@@ -109,6 +124,8 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
             getSystemService(ClipboardManager::class.java)?.removePrimaryClipChangedListener(clipListener)
         } catch (_: Exception) {
         }
+        shotObserver?.let { contentResolver.unregisterContentObserver(it) }
+        shotObserver = null
         worker.quitSafely()
         super.onDestroy()
     }
@@ -176,6 +193,7 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         selecting = false
         workerHandler.post { user.loadDictionary() }
         loadPhoto()
+        watchShots()
         stripAllowed = liveField && live && (autocorrect || glide)
         autoUndo = null
         glided = null
@@ -208,6 +226,11 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         updateSpaceLabel()
         updateAutoCaps()
         refreshSuggestions()
+        // back from "Rasm qöşiş": send the chosen picture into this field
+        ClipImages.pending?.let { f ->
+            ClipImages.pending = null
+            if (System.currentTimeMillis() - ClipImages.pendingAt < 120_000 && f.exists()) mainHandler.post { insertImage(f) }
+        }
     }
 
     private fun enterIcon(options: Int): EnterIcon {
@@ -524,13 +547,119 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         if (Build.VERSION.SDK_INT >= 33 &&
             clip.description?.extras?.getBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE) == true
         ) return
-        val text = clip.getItemAt(0)?.coerceToText(this)?.toString()?.takeIf { it.isNotBlank() } ?: return
+        val item = clip.getItemAt(0) ?: return
+        if (item.uri != null && item.text == null) return // a picture, not text (ours: see ClipImages)
+        val text = item.coerceToText(this)?.toString()?.takeIf { it.isNotBlank() } ?: return
         clips.remove(text)
         clips.add(0, text.take(2000))
         while (clips.size > 10) clips.removeAt(clips.size - 1)
     }
 
     private fun savePref(key: String, value: Int) = prefs().edit().putInt(key, value).apply()
+
+    // --- pictures in the clipboard panel: screenshots and "Rasm qöşiş" ------------------------
+
+    private fun shotsOn() = prefs().getBoolean("shots", true) && ClipImages.canReadShots(this)
+
+    /** Starts or stops watching the gallery for new screenshots. */
+    private fun watchShots() {
+        val on = shotsOn()
+        val old = shotObserver
+        if (on && old == null) {
+            val o = object : ContentObserver(workerHandler) {
+                override fun onChange(selfChange: Boolean, uri: android.net.Uri?) {
+                    workerHandler.removeCallbacks(checkShot)
+                    workerHandler.postDelayed(checkShot, 400)
+                }
+            }
+            try {
+                contentResolver.registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, o)
+                shotObserver = o
+            } catch (_: Exception) {
+            }
+        } else if (!on && old != null) {
+            contentResolver.unregisterContentObserver(old)
+            shotObserver = null
+        }
+    }
+
+    /** On the worker: a screenshot was just taken, so it goes to the panel and the clipboard. */
+    private fun takeShot() {
+        val shot = ClipImages.newestShot(this) ?: return
+        if (shot.id == lastShot) return
+        val name = "shot_${shot.id}.${ClipImages.extension(shot.mime)}"
+        if (File(ClipImages.dir(this), name).exists()) {
+            lastShot = shot.id
+            return
+        }
+        val f = ClipImages.save(this, shot.uri, name) ?: return // still being written: the next change retries
+        lastShot = shot.id
+        mainHandler.post {
+            putOnClipboard(f)
+            if (current.name == "clipboard") showClipboard()
+        }
+    }
+
+    /** Puts the picture on the phone's clipboard, so "Paste" in any app sends it. */
+    private fun putOnClipboard(f: File) {
+        try {
+            val clip = ClipData.newUri(contentResolver, "Harfix", ClipImages.uri(this, f))
+            getSystemService(ClipboardManager::class.java)?.setPrimaryClip(clip)
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Sends the picture into the field when the app takes pictures from keyboards; else it waits on the clipboard. */
+    private fun insertImage(f: File) {
+        val ic = currentInputConnection
+        val mime = ClipImages.mime(f.name)
+        val types = currentInputEditorInfo?.contentMimeTypes
+        if (ic != null && types != null && types.any { ClipDescription.compareMimeTypes(mime, it) }) {
+            val info = InputContentInfo(ClipImages.uri(this, f), ClipDescription("Harfix", arrayOf(mime)))
+            if (ic.commitContent(info, InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null)) {
+                show(letters)
+                return
+            }
+        }
+        putOnClipboard(f)
+        Toast.makeText(this, "Rasm buferda: yoziş joyini bosib turing va «Qöyiş» (Paste) ni tanlang", Toast.LENGTH_LONG).show()
+    }
+
+    /** The clipboard panel: pictures (thumbnails come from the worker) and copied texts. */
+    private fun showClipboard() {
+        rememberClip()
+        images = ClipImages.list(this)
+        show(Layouts.clipboard(clips, images.size, !shotsOn()))
+        val files = images.take(Layouts.CLIP_IMAGES)
+        val push = {
+            view?.setThumbs(files.mapIndexedNotNull { i, f -> thumbs[f.name]?.let { "img:$i" to it } }.toMap())
+        }
+        val need = files.filter { it.name !in thumbs }
+        if (need.isEmpty()) {
+            push()
+            return
+        }
+        val px = (resources.displayMetrics.density * 140).toInt()
+        workerHandler.post {
+            val made = need.mapNotNull { f -> thumbnail(f, px)?.let { f.name to it } }
+            mainHandler.post {
+                made.forEach { (n, b) -> thumbs[n] = b }
+                val keep = images.map { it.name }.toSet()
+                thumbs.keys.retainAll(keep)
+                if (current.name == "clipboard") push()
+            }
+        }
+    }
+
+    private fun thumbnail(f: File, px: Int): Bitmap? = try {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(f.path, bounds)
+        var sample = 1
+        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= px) sample *= 2
+        BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = sample })
+    } catch (_: Throwable) {
+        null
+    }
 
     /** The background picture the app saves ("Klaviatura foni"). */
     private fun photoFile() = File(filesDir, "keyboard_bg.jpg")
@@ -603,9 +732,11 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         }
     }
 
-    private fun openSettings() {
+    /** Opens the app; [action] asks it to do something first ("shots": the photos permission). */
+    private fun openSettings(action: String? = null) {
         val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (action != null) intent.putExtra("harfix_action", action)
         try {
             startActivity(intent)
         } catch (_: Exception) {
@@ -651,17 +782,25 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
                 selecting = false
                 show(Layouts.edit(false))
             }
-            action == "clipboard" -> {
-                rememberClip()
-                show(Layouts.clipboard(clips))
-            }
+            action == "clipboard" -> showClipboard()
             action == "convert" -> convertField()
             action == "settings" -> openSettings()
             action == "voice" -> startVoice()
             action == "clip:clear" -> {
                 clips.clear()
-                show(Layouts.clipboard(clips))
+                ClipImages.clear(this)
+                thumbs.clear()
+                showClipboard()
             }
+            action.startsWith("img:") -> {
+                val f = images.getOrNull(action.removePrefix("img:").toIntOrNull() ?: -1) ?: return
+                if (f.exists()) insertImage(f)
+            }
+            action == "image:pick" -> try {
+                startActivity(Intent(this, PickImageActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (_: Exception) {
+            }
+            action == "shots:enable" -> openSettings("shots")
             action.startsWith("paste:") -> {
                 val clip = clips.getOrNull(action.removePrefix("paste:").toIntOrNull() ?: -1) ?: return
                 ic?.commitText(clip, 1)
