@@ -49,6 +49,7 @@ class Bridge(private val a: MainActivity) {
             .put("autocorrect", p.getBoolean("autocorrect", true))
             .put("glide", p.getBoolean("glide", true))
             .put("learn", p.getBoolean("learn", true))
+            .put("shots", p.getBoolean("shots", true) && uz.harfix.app.keyboard.ClipImages.canReadShots(a))
             .put("stats", p.getBoolean("stats", true))
             .put("notify", notify)
             .put("quiz_best", p.getInt("quiz_best", 0))
@@ -73,12 +74,13 @@ class Bridge(private val a: MainActivity) {
         val e = prefs().edit()
         when (key) {
             "live", "sound", "vibrate", "lang_ru", "lang_uz_cyrl", "words", "words_live", "stats",
-            "autocorrect", "glide", "learn" ->
+            "autocorrect", "glide", "learn", "shots" ->
                 e.putBoolean(key, value == "true")
             "target" -> e.putString(key, value)
         }
         e.apply()
         if (key == "words") Words.refreshTile(a)
+        if (key == "shots" && value == "true") a.runOnUiThread { a.askShots() }
         // the keyboard's learned words live only on the phone; switching learning off deletes them
         if (key == "learn" && value != "true") java.io.File(a.filesDir, "user_words.txt").delete()
         if (key == "stats" && value == "true") {

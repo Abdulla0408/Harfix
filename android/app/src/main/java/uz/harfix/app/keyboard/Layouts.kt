@@ -236,20 +236,33 @@ object Layouts {
     )
 
     /** Recently copied texts (newest first); a tap types one. */
-    fun clipboard(clips: List<String>): Layout {
+    /** How many pictures the clipboard panel shows (keys "img:0"...). */
+    const val CLIP_IMAGES = 3
+
+    /**
+     * The clipboard panel: the newest [images] pictures (screenshots, "Rasm qöşiş") on top, then
+     * the copied texts; [offerShots] asks to switch screenshots on.
+     */
+    fun clipboard(clips: List<String>, images: Int = 0, offerShots: Boolean = false): Layout {
         val rows = ArrayList<Row>()
-        if (clips.isEmpty()) {
-            rows.add(Row(listOf(act("Bufer böş: biror matnni nusxalang", "back")), CLIP_ROW))
+        val room = PANEL_HEIGHT - 1f
+        if (images > 0) {
+            rows.add(Row((0 until CLIP_IMAGES).map { if (it < images) act("", "img:$it") else Key("", KeyKind.SPACER) }, CLIP_ROW * 2))
+        }
+        if (offerShots) rows.add(Row(listOf(act("📷  Skrinşotlar ham şu yerda çiqsin", "shots:enable")), CLIP_ROW))
+        if (clips.isEmpty() && images == 0) {
+            rows.add(Row(listOf(act("Bufer böş: matn nusxalang yoki skrinşot oling", "back")), CLIP_ROW))
         } else {
-            for ((i, clip) in clips.take(5).withIndex()) {
+            val fit = ((room - rows.sumOf { it.height.toDouble() }.toFloat()) / CLIP_ROW + 0.01f).toInt()
+            for ((i, clip) in clips.take(minOf(5, fit)).withIndex()) {
                 val oneLine = clip.replace('\n', ' ').trim()
                 rows.add(Row(listOf(act(if (oneLine.length > 38) oneLine.take(37) + "…" else oneLine, "paste:$i")), CLIP_ROW))
             }
         }
         // empty space up to the letters' height
-        val used = rows.size * CLIP_ROW
-        if (used < PANEL_HEIGHT - 1f - 0.01f) rows.add(Row(listOf(Key("", KeyKind.SPACER)), PANEL_HEIGHT - 1f - used))
-        rows.add(Row(listOf(act("ABC", "back"), act("Tozalaş", "clip:clear"))))
+        val used = rows.sumOf { it.height.toDouble() }.toFloat()
+        if (used < room - 0.01f) rows.add(Row(listOf(Key("", KeyKind.SPACER)), room - used))
+        rows.add(Row(listOf(act("ABC", "back"), act("🖼  Rasm qöşiş", "image:pick", 1.6f), act("Tozalaş", "clip:clear"))))
         return Layout("clipboard", rows, "", false)
     }
 }
