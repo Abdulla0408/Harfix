@@ -56,10 +56,24 @@ Bu fayl bo‘lmasa, `assembleRelease` / `bundleRelease` darhol xato bilan to‘x
 Google Play qabul qilmaydigan imzosiz fayl chiqardi). Android Studio’dagi «Generate Signed Bundle / APK»
 o‘z kalitini beradi, u faylsiz ham ishlaydi.
 
-Eski imzo kaliti yo‘qolgan bo‘lsa, yangi kalit yarating (`keytool -genkeypair -v -keystore harfix.jks -keyalg RSA -keysize 2048 -validity 10000 -alias harfix`)
-va **uni kamida ikki joyda saqlang** (masalan, parol menejeri va flesh). Yangi kalit bilan imzolangan APK
-eski APK ustiga o‘rnatilmaydi: saytdan yuklab olganlar bir marta o‘chirib, qayta o‘rnatishi kerak.
-Google Play’da birinchi chiqarishda «Play App Signing» yoqing, shunda yuklash kalitini keyin almashtirsa bo‘ladi.
+1.4.0 ning kaliti eski kompyuter bilan yo‘qolgan; 1.5.0 dan boshlab yangi kalit ishlatiladi
+(`harfix-release.jks`, alias `harfix`, PKCS12). Yangi kalit bilan imzolangan APK eski APK ustiga
+o‘rnatilmaydi: saytdan 1.4.0 ni yuklab olganlar bir marta o‘chirib, qayta o‘rnatishi kerak.
+Kalitni **kamida ikki joyda saqlang** (masalan, flesh va bulut): yo‘qolsa, saytdagi ilovani
+yangilab bo‘lmaydi. Kalit yaratish: `keytool -genkeypair -v -keystore harfix-release.jks -storetype PKCS12 -alias harfix -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Harfix, O=Harfix, C=UZ"`.
+
+**GitHub’da yig‘ish** (`.github/workflows/android-release.yml`, Actions → android-release → Run
+workflow): repo’ning ikkita secret’i kerak. Ularni kalit egasi o‘zi qo‘yadi:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("harfix-release.jks")) | gh secret set ANDROID_KEYSTORE_BASE64 --repo Abdulla0408/Harfix
+gh secret set ANDROID_KEYSTORE_PASSWORD --repo Abdulla0408/Harfix
+```
+
+Natija (`Harfix-android-release` artifact): `Harfix.apk` (sayt), `Harfix-play.aab` (Google Play),
+`SHA256SUMS.txt` va R8 mapping fayllari.
+Google Play’da birinchi chiqarishda «Play App Signing» yoqing: shu kalit faqat *upload key* bo‘ladi,
+yo‘qolsa Play orqali almashtirsa bo‘ladi.
 
 ## Tuzilishi
 
