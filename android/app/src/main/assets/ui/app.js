@@ -125,12 +125,12 @@
     if (textField(e.target)) document.body.classList.add("typing");
   });
   document.addEventListener("focusout", function () { document.body.classList.remove("typing"); });
-  var fullHeight = {}, keyboardOpen = false;
-  fullHeight[window.innerWidth] = window.innerHeight;
+  // The page takes the whole screen except the system bars (and the ad banner), so a page much
+  // shorter than the screen means the keyboard is up; this also holds right after rotating.
+  function keyboardShown() { return window.innerHeight < (window.screen.height || window.innerHeight) * 0.75; }
+  var keyboardOpen = keyboardShown();
   window.addEventListener("resize", function () {
-    var w = window.innerWidth, h = window.innerHeight;
-    if (!fullHeight[w] || h > fullHeight[w]) fullHeight[w] = h;
-    var open = h < fullHeight[w] - 120;
+    var open = keyboardShown();
     if (open === keyboardOpen) return;
     keyboardOpen = open;
     document.body.classList.toggle("typing", open && textField(document.activeElement));
