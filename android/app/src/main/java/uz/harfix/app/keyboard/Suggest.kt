@@ -17,6 +17,9 @@ object Suggest {
 
     val EMPTY = Result(emptyList(), null)
 
+    /** A strip entry starting with this adds the word after it to the user's dictionary. */
+    const val ADD = "＋ "
+
     /** How far a word of this length may be changed without asking. */
     private fun sureCost(len: Int) = if (len <= 3) 0.6f else if (len <= 7) 1f else 1.3f
 
@@ -74,8 +77,10 @@ object Suggest {
         user?.completions(key, 2)?.forEach { out.add(matchCase(it, typed)) }
         corrections.forEach { out.add(matchCase(it.entry.word, typed)) }
         completions.forEach { out.add(matchCase(it.word, typed)) }
-        if (fix != null) out.add(typed) // keep what was typed, one tap away
-        return Result(out.take(3), fix)
+        val words = out.filter { it != typed || known }.toMutableList()
+        // an unknown word: one tap keeps it and adds it to the user's dictionary
+        if (!known && key.length >= 2) words.add(minOf(1, words.size), ADD + typed)
+        return Result(words.take(3), fix)
     }
 
     /** [word] written the way [typed] is: CAPS, Capitalised, or as the dictionary has it. */
@@ -99,9 +104,55 @@ object Suggest {
  * keyboard's own file; nothing is sent. A word counts as known after it was typed twice, or
  * at once when the user undoes an autocorrection of it. "So‘zlarni o‘rganish" off clears it.
  */
-class UserWords(private val file: File) {
+class UserWords(private val file: File, private val dictFile: File? = null) {
     private val counts = HashMap<String, Int>()
     private var dirty = false
+    /** Words the user added on purpose (the app's form or the ＋ chip), as written; kept when learning is off. */
+    private val added = LinkedHashMap<String, String>()
+
+    /** Reads the user's dictionary (the app can change it too). */
+    @Synchronized fun loadDictionary() {
+        added.clear()
+        val f = dictFile ?: return
+        if (!f.exists()) return
+        f.forEachLine(Charsets.UTF_8) { line ->
+            val w = line.trim()
+            if (w.isNotEmpty()) added[Dictionary.normalize(w)] = w
+        }
+    }
+
+    /** Adds [word] to the user's dictionary; false if it is not a word. */
+    @Synchronized fun add(word: String): Boolean {
+        val w = word.trim()
+        val key = Dictionary.normalize(w)
+        if (!ANY_WORD.matches(key)) return false
+        if (added.put(key, w) == null) {
+            try {
+                dictFile?.appendText(w + "\n", Charsets.UTF_8)
+            } catch (_: Exception) {
+            }
+        }
+        return true
+    }
+
+    @Synchronized fun isAdded(key: String): Boolean = added.containsKey(key)
+
+    /** The user's dictionary, as written, in the order added. */
+    @Synchronized fun dictionary(): List<String> = added.values.toList()
+
+    /** Removes [word] from the user's dictionary (and forgets it was learned). */
+    @Synchronized fun remove(word: String) {
+        val key = Dictionary.normalize(word.trim())
+        if (added.remove(key) == null) return
+        try {
+            dictFile?.writeText(added.values.joinToString("") { it + "\n" }, Charsets.UTF_8)
+        } catch (_: Exception) {
+        }
+        if (counts.remove(key) != null) {
+            dirty = true
+            save()
+        }
+    }
 
     @Synchronized fun load() {
         counts.clear()
@@ -112,7 +163,7 @@ class UserWords(private val file: File) {
         }
     }
 
-    @Synchronized fun knows(key: String): Boolean = (counts[key] ?: 0) >= 2
+    @Synchronized fun knows(key: String): Boolean = added.containsKey(key) || (counts[key] ?: 0) >= 2
 
     @Synchronized fun learn(word: String, by: Int = 1) {
         val key = Dictionary.normalize(word)
@@ -124,9 +175,12 @@ class UserWords(private val file: File) {
         }
     }
 
-    @Synchronized fun completions(prefix: String, limit: Int): List<String> =
-        counts.entries.filter { it.value >= 2 && it.key != prefix && it.key.startsWith(prefix) }
-            .sortedByDescending { it.value }.take(limit).map { it.key }
+    @Synchronized fun completions(prefix: String, limit: Int): List<String> {
+        val own = added.entries.filter { it.key != prefix && it.key.startsWith(prefix) }.map { it.value }
+        val learned = counts.entries.filter { it.value >= 2 && it.key != prefix && it.key.startsWith(prefix) }
+            .sortedByDescending { it.value }.map { it.key }
+        return (own + learned).distinct().take(limit)
+    }
 
     @Synchronized fun save() {
         if (!dirty) return
@@ -145,6 +199,9 @@ class UserWords(private val file: File) {
 
     companion object {
         const val FILE = "user_words.txt"
+        /** The user's own dictionary: one word per line, edited by the keyboard and the app. */
+        const val DICT_FILE = "user_dict.txt"
+        private val ANY_WORD = Regex("[\\p{L}]{2,30}(?:'[\\p{L}]+)*")
         private const val MAX = 3000
         private val VALID = Regex("[a-zöğşçñ]{2,24}(?:'[a-zöğşçñ]+)?")
     }

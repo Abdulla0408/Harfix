@@ -331,3 +331,12 @@ body.typing { padding-bottom: 12px; }
   .progress div { transition: none; }
 }
 @keyframes fade-in { from { opacity: 0; } }
+
+/* personal dictionary and keyboard background (Klaviatura) */
+.dict-form { display: flex; gap: 8px; margin-top: 10px; }
+.dict-form input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+  background: var(--card); color: var(--text); font: inherit; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip { border: 1px solid var(--line); border-radius: 99px; padding: 6px 12px; background: var(--soft); color: var(--text); font: inherit; }
+.bg-buttons { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+#kbd-onboard .sheet-actions { grid-template-columns: 1fr; }

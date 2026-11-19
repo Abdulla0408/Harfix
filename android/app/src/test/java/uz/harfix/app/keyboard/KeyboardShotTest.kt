@@ -16,9 +16,14 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
 class KeyboardShotTest {
-    private fun shot(name: String, layout: Layout, shift: Shift = Shift.OFF, enter: EnterIcon = EnterIcon.NEWLINE, words: List<String>? = null, toolbar: Boolean = false) {
+    private fun shot(
+        name: String, layout: Layout, shift: Shift = Shift.OFF, enter: EnterIcon = EnterIcon.NEWLINE,
+        words: List<String>? = null, toolbar: Boolean = false, theme: Int = 0, photo: Bitmap? = null,
+    ) {
         val ctx = RuntimeEnvironment.getApplication()
         val v = KeyboardView(ctx)
+        if (theme != 0) v.setLook(0, 1f, theme)
+        if (photo != null) v.setPhoto(photo)
         v.setLayout(layout)
         v.setShift(shift)
         v.setEnterIcon(enter)
@@ -53,6 +58,33 @@ class KeyboardShotTest {
         shot("7-numbers", Layouts.numbers(false))
         shot("8-phone", Layouts.numbers(true))
         shot("13-numpad", Layouts.numpad(), toolbar = true)
+    }
+
+    @Test
+    fun vividThemes() {
+        val latin = Layouts.latin("Рус", true)
+        val add = listOf("uçun", Suggest.ADD + "ucun", "uçinçi")
+        shot("14-lojuvard", latin, words = add, theme = 3)
+        shot("14b-lojuvard-numpad", Layouts.numpad(), toolbar = true, theme = 3)
+        shot("15-shafaq", latin, toolbar = true, theme = 4)
+        shot("16-tun", Layouts.menu("Tun"), toolbar = true, theme = 5)
+        shot("17-photo", latin, toolbar = true, theme = 6, photo = picture())
+    }
+
+    /** A made-up "photo": a sunset gradient with a few soft circles. */
+    private fun picture(): Bitmap {
+        val b = Bitmap.createBitmap(900, 1200, Bitmap.Config.ARGB_8888)
+        val c = Canvas(b)
+        val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        p.shader = android.graphics.LinearGradient(0f, 0f, 900f, 1200f, 0xFF1E3C72.toInt(), 0xFFFF7E5F.toInt(), android.graphics.Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, 900f, 1200f, p)
+        p.shader = null
+        p.color = 0x55FFFFFF
+        c.drawCircle(220f, 700f, 160f, p)
+        c.drawCircle(640f, 520f, 240f, p)
+        p.color = 0x55FFD36B
+        c.drawCircle(480f, 820f, 120f, p)
+        return b
     }
 
     @Test
