@@ -28,6 +28,9 @@ qurilmaning oʻzida bajariladi. Oʻgirilgan fayl siz tanlagan joyga saqlanadi (A
 Asl fayllar oʻzgartirilmaydi.
 
 **Harfix klaviaturasi (Android).** Klaviatura bilan yozilgan matn saqlanmaydi va yuborilmaydi.
+Takliflar va avto-tuzatish ilova ichidagi lugʻat bilan telefonning oʻzida ishlaydi. «Soʻzlarni oʻrganish»
+yoqilgan boʻlsa (odatda yoqilgan), lugʻatda yoʻq soʻzlaringiz faqat klaviaturaning telefondagi faylida
+eslab qolinadi va hech qayerga yuborilmaydi; uni oʻchirsangiz, bu soʻzlar ham oʻchiriladi.
 Parol, e-mail va sayt manzili maydonlarida yozayotganda oʻgirish ishlamaydi.
 
 **«Yozayotganda oʻgirish» (Windows).** Dastur oʻ, gʻ, sh, ch harflarini almashtirish uchun

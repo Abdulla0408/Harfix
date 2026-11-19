@@ -1,0 +1,41 @@
+# Builds the keyboard dictionary (android/app/src/main/assets/dict/uz.txt) from the latest
+# Uzbek Wikipedia dump. The result is under the run's Artifacts ("Harfix-dictionary"); copy it
+# into the repository when it should change.
+name: dictionary
+on:
+  push:
+    paths: ["android/tools/build_dictionary.py", ".github/workflows/dictionary.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download the Uzbek Wikipedia articles dump
+        run: |
+          base=https://dumps.wikimedia.org/uzwiki/latest
+          curl -fsSL --retry 5 -A "harfix-dictionary-build/1.0 (github.com/Abdulla0408/Harfix)" -o dump.xml.bz2 "$base/uzwiki-latest-pages-articles.xml.bz2"
+          curl -fsSL --retry 5 -o sha1sums.txt "$base/uzwiki-latest-sha1sums.txt"
+          want=$(grep -E "pages-articles\.xml\.bz2$" sha1sums.txt | grep -v multistream | awk '{print $1}')
+          echo "$want  dump.xml.bz2" | sha1sum -c -
+          grep -E "pages-articles\.xml\.bz2$" sha1sums.txt | grep -v multistream | awk '{print $2}' > dump-name.txt
+
+      - name: Build the dictionary
+        run: |
+          python android/tools/build_dictionary.py dump.xml.bz2
+          echo "source: $(cat dump-name.txt)"
+          wc -l android/app/src/main/assets/dict/uz.txt
+          head -30 android/app/src/main/assets/dict/uz.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Harfix-dictionary
+          path: |
+            android/app/src/main/assets/dict/uz.txt
+            dump-name.txt

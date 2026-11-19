@@ -28,13 +28,22 @@ object Live {
         val last = before.lastOrNull() ?: return null
         val second = if (Converter.APOSTROPHES.indexOf(typed) >= 0) '\'' else typed.lowercaseChar()
         var rep = PAIRS[last.lowercaseChar() to second] ?: return null
-        var start = before.length
-        while (start > 0 && !before[start - 1].isWhitespace()) start--
-        val word = before.subSequence(start, before.length).toString().lowercase(Locale.ROOT)
-        if (SKIP.any { word.contains(it) }) return null
-        if (word.length > 1 && word[0].isDigit()) return null
+        if (isLinkish(lastWord(before))) return null
         if (last.isUpperCase()) rep = rep.uppercase(Locale.ROOT)
         return Swap(1, rep)
+    }
+
+    /** The word that ends at the end of [before] (back to the last whitespace). */
+    fun lastWord(before: CharSequence): String {
+        var start = before.length
+        while (start > 0 && !before[start - 1].isWhitespace()) start--
+        return before.subSequence(start, before.length).toString()
+    }
+
+    /** A link, e-mail, @name, #tag, path or code-like word, or one that starts with a digit. */
+    fun isLinkish(word: String): Boolean {
+        val w = word.lowercase(Locale.ROOT)
+        return SKIP.any { w.contains(it) } || (w.length > 1 && w[0].isDigit())
     }
 
     /** The last automatic swap, so Backspace can undo it. */

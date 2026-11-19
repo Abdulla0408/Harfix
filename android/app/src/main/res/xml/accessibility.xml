@@ -1,3 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<accessibility-service android:description="@string/words_description" android:settingsActivity="uz.harfix.app.MainActivity" android:accessibilityEventTypes="typeViewTextChanged" android:accessibilityFeedbackType="feedbackGeneric" android:notificationTimeout="0" android:canRetrieveWindowContent="true"
-  xmlns:android="http://schemas.android.com/apk/res/android" />
+<!-- "Odatiy klaviaturada" (WordsService, play flavor). Not an accessibility tool: Google Play
+     needs the in-app disclosure and a Play Console declaration (android/PLAY.md). -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeViewTextChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/words_description"
+    android:isAccessibilityTool="false"
+    android:notificationTimeout="0"
+    android:settingsActivity="uz.harfix.app.MainActivity" />

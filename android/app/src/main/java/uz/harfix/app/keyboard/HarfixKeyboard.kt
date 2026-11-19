@@ -1,18 +1,36 @@
 package uz.harfix.app.keyboard
 
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.content.Context
+import android.database.ContentObserver
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.provider.MediaStore
+import android.content.Intent
 import android.content.SharedPreferences
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Looper
 import android.os.SystemClock
 import android.text.InputType
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedTextRequest
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputContentInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.Toast
+import uz.harfix.app.Converter
 import uz.harfix.app.Online
+import java.io.File
+import java.util.Locale
 import kotlin.math.abs
 
 /**
@@ -40,6 +58,86 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     private var vibrate = true
     private val audio by lazy { getSystemService(AudioManager::class.java) }
 
+    // dictionary: suggestions, autocorrect, glide typing (Latin letters, ordinary text fields)
+    @Volatile private var dict: Dictionary? = null
+    private lateinit var user: UserWords
+    private var autocorrect = true
+    private var glide = true
+    private var learn = true
+    /** Ordinary text field with the new alphabet on: the strip may show (on the Latin letters). */
+    private var stripAllowed = false
+    private var stripOn = false
+    /** The last autocorrection (typed word, what it became), so Backspace can undo it. */
+    private var autoUndo: Pair<String, String>? = null
+    /** Words the last glide found: the first was typed, the rest stay in the strip. */
+    private var glided: List<String>? = null
+    /** The last suggestions and the word they are for (main thread only). */
+    private var cached: Pair<String, Suggest.Result>? = null
+    /** Dictionary work runs here, never on the main thread, so typing stays smooth. */
+    private val worker = HandlerThread("harfix-suggest").apply { start() }
+    private val workerHandler = Handler(worker.looper)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var requestId = 0
+    /** Suggestions follow a key press a moment later, after its frame is drawn. */
+    private val refreshLater = Runnable { refreshSuggestions() }
+
+    // toolbar and panels
+    /** Texts copied while the keyboard runs, newest first; kept in memory only, never saved or sent. */
+    private val clips = ArrayList<String>()
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { rememberClip() }
+    /** Pictures in the clipboard panel (ClipImages), newest first, and their thumbnails by file name. */
+    private var images: List<File> = emptyList()
+    private val thumbs = HashMap<String, Bitmap>()
+    /** Sees new screenshots while "Skrinshotlar buferda" is on and the photos permission is given. */
+    private var shotObserver: ContentObserver? = null
+    @Volatile private var lastShot = -1L
+    private val checkShot = Runnable { takeShot() }
+    /** Text-editing panel: the arrows extend the selection. */
+    private var selecting = false
+    private var oneHand = 0
+    private var sizeStep = 0
+    private var themeMode = 0
+
+    override fun onCreate() {
+        super.onCreate()
+        try {
+            getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
+        } catch (_: Exception) {
+        }
+        watchShots()
+        user = UserWords(File(filesDir, UserWords.FILE), File(filesDir, UserWords.DICT_FILE))
+        workerHandler.post {
+            user.load()
+            user.loadDictionary()
+            try {
+                dict = assets.open("dict/uz.txt").use { main ->
+                    assets.open("dict/uz-extra.txt").use { extra -> Dictionary.load(main, extra) }
+                }
+            } catch (_: Exception) {
+            }
+            mainHandler.post { refreshSuggestions() }
+        }
+    }
+
+    override fun onDestroy() {
+        try {
+            getSystemService(ClipboardManager::class.java)?.removePrimaryClipChangedListener(clipListener)
+        } catch (_: Exception) {
+        }
+        shotObserver?.let { contentResolver.unregisterContentObserver(it) }
+        shotObserver = null
+        worker.quitSafely()
+        super.onDestroy()
+    }
+
+    /** Suggestions for [word]: from the cache, or worked out now (only when a word ends). */
+    private fun resultFor(d: Dictionary, word: String): Suggest.Result {
+        cached?.let { (w, r) -> if (w == word) return r }
+        val r = Suggest.forWord(d, if (learn) user else null, word)
+        cached = word to r
+        return r
+    }
+
     @Suppress("DEPRECATION")
     private fun prefs(): SharedPreferences = getSharedPreferences("harfix", Context.MODE_MULTI_PROCESS)
 
@@ -55,8 +153,10 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     override fun onCreateInputView(): View {
         val v = KeyboardView(this)
         v.listener = this
+        v.setLook(oneHand, SIZES[sizeStep], themeMode)
         v.setLayout(current)
         view = v
+        photoStamp = 0L // the new view has no picture yet
         return v
     }
 
@@ -83,6 +183,21 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         live = p.getBoolean("live", true)
         sound = p.getBoolean("sound", false)
         vibrate = p.getBoolean("vibrate", true)
+        autocorrect = p.getBoolean("autocorrect", true)
+        glide = p.getBoolean("glide", true)
+        learn = p.getBoolean("learn", true)
+        if (!learn) user.clear()
+        oneHand = p.getInt("one_hand", 0)
+        sizeStep = p.getInt("size", 0)
+        themeMode = p.getInt("theme", 0).coerceIn(0, KeyboardTheme.NAMES.size - 1)
+        selecting = false
+        workerHandler.post { user.loadDictionary() }
+        loadPhoto()
+        watchShots()
+        stripAllowed = liveField && live && (autocorrect || glide)
+        autoUndo = null
+        glided = null
+        cached = null
         noSelection = info.initialSelStart == info.initialSelEnd
 
         languages = buildList {
@@ -101,13 +216,21 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         shift = Shift.OFF
         undo.pending = null
         view?.apply {
+            setLook(oneHand, SIZES[sizeStep], themeMode)
             setLayout(current)
             setShift(Shift.OFF)
             setEnterIcon(enterIcon(info.imeOptions))
             setShowPreview(!password)
         }
+        updateStrip()
         updateSpaceLabel()
         updateAutoCaps()
+        refreshSuggestions()
+        // back from "Rasm qöşiş": send the chosen picture into this field
+        ClipImages.pending?.let { f ->
+            ClipImages.pending = null
+            if (System.currentTimeMillis() - ClipImages.pendingAt < 120_000 && f.exists()) mainHandler.post { insertImage(f) }
+        }
     }
 
     private fun enterIcon(options: Int): EnterIcon {
@@ -124,12 +247,16 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
 
     override fun onFinishInputView(finishingInput: Boolean) {
         undo.pending = null
+        autoUndo = null
+        user.save()
         super.onFinishInputView(finishingInput)
     }
 
     override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int, candidatesStart: Int, candidatesEnd: Int) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         noSelection = newSelStart == newSelEnd
+        mainHandler.removeCallbacks(refreshLater)
+        mainHandler.postDelayed(refreshLater, 30)
         // typing moves the cursor by a character or two; anything else ends the undo chance
         if (noSelection && abs(newSelStart - oldSelStart) <= 2) return
         undo.pending = null
@@ -155,6 +282,14 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     override fun onText(text: String) {
         val ic = currentInputConnection ?: return
         val c = text.singleOrNull()
+        glided = null
+        if (c != null && isWordEnd(c) && finishWord(ic, text)) {
+            undo.pending = null
+            if (shift == Shift.ON) setShift(Shift.OFF)
+            updateAutoCaps()
+            return
+        }
+        autoUndo = null
         var swap: Swap? = null
         if (c != null && liveField && live && noSelection && Live.isTrigger(c)) {
             val before = ic.getTextBeforeCursor(48, 0) ?: ""
@@ -193,6 +328,8 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
             }
             KeyKind.BACKSPACE -> {
                 val ic = currentInputConnection ?: return
+                glided = null
+                if (undoAutocorrect(ic)) return
                 if (undo.pending != null && noSelection) {
                     val s = undo.undo(ic.getTextBeforeCursor(8, 0) ?: "")
                     if (s != null) {
@@ -211,6 +348,9 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
                 val info = currentInputEditorInfo ?: return
                 val ic = currentInputConnection ?: return
                 undo.pending = null
+                glided = null
+                finishWord(ic, "")
+                autoUndo = null
                 val action = info.imeOptions and EditorInfo.IME_MASK_ACTION
                 val noAction = info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
                 val multiLine = info.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
@@ -219,15 +359,20 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
                 } else {
                     ic.performEditorAction(action)
                 }
+                // a new line starts a sentence: capital letter, as after ". "
+                updateAutoCaps()
             }
             KeyKind.SPACE -> {
                 undo.pending = null
-                currentInputConnection?.commitText(" ", 1)
+                glided = null
+                val ic = currentInputConnection ?: return
+                if (!finishWord(ic, " ")) ic.commitText(" ", 1)
                 if (shift == Shift.ON) setShift(Shift.OFF)
                 updateAutoCaps()
             }
             KeyKind.SYMBOLS -> show(Layouts.symbols(letters, globe))
             KeyKind.MORE_SYMBOLS -> show(Layouts.more(letters, globe))
+            KeyKind.NUMPAD -> show(Layouts.numpad())
             KeyKind.LETTERS -> show(letters)
             KeyKind.LANG -> {
                 val next = languages[(languages.indexOf(letters.name) + 1) % languages.size]
@@ -259,7 +404,452 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     private fun show(layout: Layout) {
         current = layout
         view?.setLayout(layout)
+        updateStrip()
         if (layout.autoCaps) updateAutoCaps() else setShift(Shift.OFF)
+        refreshSuggestions()
+    }
+
+    // --- dictionary --------------------------------------------------------------------------
+
+    /** The strip and glide work on the Latin letters in ordinary text fields with the new alphabet on. */
+    private fun updateStrip() {
+        val latin = current === letters && letters.name == "latin"
+        stripOn = stripAllowed && latin
+        view?.setStrip(current.name != "numbers")
+        view?.setGlide(glide && stripOn)
+        if (!stripOn) view?.setSuggestions(emptyList())
+    }
+
+    /** The word around the cursor: the part before it and, when the cursor is inside it, the rest. */
+    private fun wordAt(ic: InputConnection): Pair<String, String> {
+        val before = Suggest.wordBefore(ic.getTextBeforeCursor(40, 0) ?: "")
+        val after = ic.getTextAfterCursor(24, 0) ?: ""
+        var end = 0
+        while (end < after.length && (after[end].isLetter() || Converter.APOSTROPHES.indexOf(after[end]) >= 0)) end++
+        return before to after.substring(0, end)
+    }
+
+    private fun refreshSuggestions() {
+        val v = view ?: return
+        if (!stripOn) return
+        val d = dict
+        val ic = currentInputConnection
+        if (d == null || ic == null) {
+            v.setSuggestions(emptyList())
+            return
+        }
+        val (head, tail) = wordAt(ic)
+        val word = head + tail
+        val g = glided
+        if (g != null && tail.isEmpty() && word == g.first()) {
+            v.setSuggestions(g.take(3))
+            return
+        }
+        if (word.isEmpty()) {
+            requestId++
+            v.setSuggestions(emptyList())
+            return
+        }
+        cached?.let { (w, r) ->
+            if (w == word) {
+                v.setSuggestions(r.words)
+                return
+            }
+        }
+        // only the newest word matters: older requests are dropped
+        val id = ++requestId
+        val u = if (learn) user else null
+        workerHandler.removeCallbacksAndMessages(SUGGEST)
+        workerHandler.postAtTime({
+            val r = Suggest.forWord(d, u, word)
+            mainHandler.post {
+                if (id != requestId) return@post
+                cached = word to r
+                view?.setSuggestions(r.words)
+            }
+        }, SUGGEST, SystemClock.uptimeMillis())
+    }
+
+    /** Space, punctuation and the like end a word; apostrophes and hyphens are inside words. */
+    private fun isWordEnd(c: Char) =
+        !c.isLetterOrDigit() && !c.isWhitespace() && c != '-' && Converter.APOSTROPHES.indexOf(c) < 0
+
+    /**
+     * A word ends with [end] (" ", punctuation, or "" before Enter): autocorrect it when sure, else
+     * learn it if the dictionary does not know it. Returns true if [end] was typed here.
+     */
+    private fun finishWord(ic: InputConnection, end: String): Boolean {
+        autoUndo = null
+        if (!stripOn || !noSelection) return false
+        val d = dict ?: return false
+        val (word, tail) = wordAt(ic)
+        if (word.length < 2 || tail.isNotEmpty()) return false // editing inside a word: leave it
+        val fix = if (autocorrect) resultFor(d, word).autocorrect else null
+        if (fix != null && fix != word) {
+            ic.beginBatchEdit()
+            ic.deleteSurroundingText(word.length, 0)
+            ic.commitText(fix + end, 1)
+            ic.endBatchEdit()
+            autoUndo = word to fix + end
+            return end.isNotEmpty()
+        }
+        if (learn && d.lookup(word) == null) user.learn(word)
+        return false
+    }
+
+    /** Backspace right after an autocorrection: the typed word comes back and is learned. */
+    private fun undoAutocorrect(ic: InputConnection): Boolean {
+        val (typed, became) = autoUndo ?: return false
+        autoUndo = null
+        if (!noSelection || ic.getTextBeforeCursor(became.length, 0)?.toString() != became) return false
+        ic.beginBatchEdit()
+        ic.deleteSurroundingText(became.length, 0)
+        ic.commitText(typed, 1)
+        ic.endBatchEdit()
+        if (learn) user.learn(typed, 2)
+        cached = null
+        return true
+    }
+
+    override fun onSuggestion(text: String) {
+        val ic = currentInputConnection ?: return
+        if (text.startsWith(Suggest.ADD)) {
+            val word = text.removePrefix(Suggest.ADD)
+            if (user.add(word)) Toast.makeText(this, "«$word» luğatga qöşildi", Toast.LENGTH_SHORT).show()
+            cached = null
+            onSuggestion(word)
+            return
+        }
+        val (head, tail) = wordAt(ic)
+        ic.beginBatchEdit()
+        if (head.isNotEmpty() || tail.isNotEmpty()) ic.deleteSurroundingText(head.length, tail.length)
+        ic.commitText(if (tail.isEmpty()) "$text " else text, 1)
+        ic.endBatchEdit()
+        undo.pending = null
+        autoUndo = null
+        glided = null
+        if (learn && dict?.lookup(text) == null) user.learn(text, 2)
+        cached = null
+        if (shift == Shift.ON) setShift(Shift.OFF)
+        updateAutoCaps()
+    }
+
+    // --- toolbar and panels ----------------------------------------------------------------------
+
+    private fun rememberClip() {
+        val cm = getSystemService(ClipboardManager::class.java) ?: return
+        val clip = try {
+            cm.primaryClip
+        } catch (_: Exception) {
+            null
+        } ?: return
+        // passwords copied from password managers are marked sensitive: never keep them
+        if (Build.VERSION.SDK_INT >= 33 &&
+            clip.description?.extras?.getBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE) == true
+        ) return
+        val item = clip.getItemAt(0) ?: return
+        if (item.uri != null && item.text == null) return // a picture, not text (ours: see ClipImages)
+        val text = item.coerceToText(this)?.toString()?.takeIf { it.isNotBlank() } ?: return
+        clips.remove(text)
+        clips.add(0, text.take(2000))
+        while (clips.size > 10) clips.removeAt(clips.size - 1)
+    }
+
+    private fun savePref(key: String, value: Int) = prefs().edit().putInt(key, value).apply()
+
+    // --- pictures in the clipboard panel: screenshots and "Rasm qöşiş" ------------------------
+
+    private fun shotsOn() = prefs().getBoolean("shots", true) && ClipImages.canReadShots(this)
+
+    /** Starts or stops watching the gallery for new screenshots. */
+    private fun watchShots() {
+        val on = shotsOn()
+        val old = shotObserver
+        if (on && old == null) {
+            val o = object : ContentObserver(workerHandler) {
+                override fun onChange(selfChange: Boolean, uri: android.net.Uri?) {
+                    workerHandler.removeCallbacks(checkShot)
+                    workerHandler.postDelayed(checkShot, 400)
+                }
+            }
+            try {
+                contentResolver.registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, o)
+                shotObserver = o
+            } catch (_: Exception) {
+            }
+        } else if (!on && old != null) {
+            contentResolver.unregisterContentObserver(old)
+            shotObserver = null
+        }
+    }
+
+    /** On the worker: a screenshot was just taken, so it goes to the panel and the clipboard. */
+    private fun takeShot() {
+        val shot = ClipImages.newestShot(this) ?: return
+        if (shot.id == lastShot) return
+        val name = "shot_${shot.id}.${ClipImages.extension(shot.mime)}"
+        if (File(ClipImages.dir(this), name).exists()) {
+            lastShot = shot.id
+            return
+        }
+        val f = ClipImages.save(this, shot.uri, name) ?: return // still being written: the next change retries
+        lastShot = shot.id
+        mainHandler.post {
+            putOnClipboard(f)
+            if (current.name == "clipboard") showClipboard()
+        }
+    }
+
+    /** Puts the picture on the phone's clipboard, so "Paste" in any app sends it. */
+    private fun putOnClipboard(f: File) {
+        try {
+            val clip = ClipData.newUri(contentResolver, "Harfix", ClipImages.uri(this, f))
+            getSystemService(ClipboardManager::class.java)?.setPrimaryClip(clip)
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Sends the picture into the field when the app takes pictures from keyboards; else it waits on the clipboard. */
+    private fun insertImage(f: File) {
+        val ic = currentInputConnection
+        val mime = ClipImages.mime(f.name)
+        val types = currentInputEditorInfo?.contentMimeTypes
+        if (ic != null && types != null && types.any { ClipDescription.compareMimeTypes(mime, it) }) {
+            val info = InputContentInfo(ClipImages.uri(this, f), ClipDescription("Harfix", arrayOf(mime)))
+            if (ic.commitContent(info, InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null)) {
+                show(letters)
+                return
+            }
+        }
+        putOnClipboard(f)
+        Toast.makeText(this, "Rasm buferda: yoziş joyini bosib turing va «Qöyiş» (Paste) ni tanlang", Toast.LENGTH_LONG).show()
+    }
+
+    /** The clipboard panel: pictures (thumbnails come from the worker) and copied texts. */
+    private fun showClipboard() {
+        rememberClip()
+        images = ClipImages.list(this)
+        show(Layouts.clipboard(clips, images.size, !shotsOn()))
+        val files = images.take(Layouts.CLIP_IMAGES)
+        val push = {
+            view?.setThumbs(files.mapIndexedNotNull { i, f -> thumbs[f.name]?.let { "img:$i" to it } }.toMap())
+        }
+        val need = files.filter { it.name !in thumbs }
+        if (need.isEmpty()) {
+            push()
+            return
+        }
+        val px = (resources.displayMetrics.density * 140).toInt()
+        workerHandler.post {
+            val made = need.mapNotNull { f -> thumbnail(f, px)?.let { f.name to it } }
+            mainHandler.post {
+                made.forEach { (n, b) -> thumbs[n] = b }
+                val keep = images.map { it.name }.toSet()
+                thumbs.keys.retainAll(keep)
+                if (current.name == "clipboard") push()
+            }
+        }
+    }
+
+    private fun thumbnail(f: File, px: Int): Bitmap? = try {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(f.path, bounds)
+        var sample = 1
+        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= px) sample *= 2
+        BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = sample })
+    } catch (_: Throwable) {
+        null
+    }
+
+    /** The background picture the app saves ("Klaviatura foni"). */
+    private fun photoFile() = File(filesDir, "keyboard_bg.jpg")
+    private var photoStamp = 0L
+
+    /** Loads the picture for the "Rasm" theme (on the worker), or drops it. */
+    private fun loadPhoto() {
+        val f = photoFile()
+        if (themeMode != KeyboardTheme.NAMES.size - 1 || !f.exists()) {
+            photoStamp = 0L
+            view?.setPhoto(null)
+            return
+        }
+        val stamp = f.lastModified()
+        if (stamp == photoStamp) return
+        photoStamp = stamp
+        workerHandler.post {
+            val bmp = try {
+                android.graphics.BitmapFactory.decodeFile(f.path)
+            } catch (_: Throwable) {
+                null
+            }
+            mainHandler.post { view?.setPhoto(bmp) }
+        }
+    }
+
+    private fun applyLook() {
+        view?.setLook(oneHand, SIZES[sizeStep], themeMode)
+    }
+
+    /** A key with Shift held while selecting (text editing panel). */
+    private fun moveKey(code: Int) {
+        val ic = currentInputConnection ?: return
+        val now = SystemClock.uptimeMillis()
+        val meta = if (selecting) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, code, 0, meta))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, code, 0, meta))
+    }
+
+    /** The whole text (or the selection) to the new alphabet, in place. */
+    private fun convertField() {
+        val ic = currentInputConnection ?: return
+        if (password) return
+        val selected = ic.getSelectedText(0)?.toString()
+        if (!selected.isNullOrEmpty()) {
+            val out = Converter.convert(selected, "new")
+            if (out != selected) ic.commitText(out, 1)
+            return
+        }
+        val text = ic.getExtractedText(ExtractedTextRequest(), 0)?.text?.toString() ?: return
+        val out = Converter.convert(text, "new")
+        if (out == text) return
+        ic.beginBatchEdit()
+        ic.setSelection(0, text.length)
+        ic.commitText(out, 1)
+        ic.endBatchEdit()
+    }
+
+    /** Google voice typing (or another voice keyboard), if the phone has one. */
+    private fun startVoice() {
+        val imm = getSystemService(InputMethodManager::class.java)
+        val voice = imm.shortcutInputMethodsAndSubtypes.entries.firstOrNull() ?: return
+        val subtype = voice.value.firstOrNull()
+        if (Build.VERSION.SDK_INT >= 28) {
+            switchInputMethod(voice.key.id, subtype)
+        } else {
+            val token = window.window?.attributes?.token ?: return
+            @Suppress("DEPRECATION")
+            imm.setInputMethodAndSubtype(token, voice.key.id, subtype)
+        }
+    }
+
+    /** Opens the app; [action] asks it to do something first ("shots": the photos permission). */
+    private fun openSettings(action: String? = null) {
+        val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (action != null) intent.putExtra("harfix_action", action)
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+        }
+    }
+
+    override fun onAction(action: String) {
+        val ic = currentInputConnection
+        when {
+            action == "back" -> show(letters)
+            action == "menu" -> show(if (current.name == "menu") letters else Layouts.menu(KeyboardTheme.NAMES[themeMode]))
+            action == "lang" -> onKey(KeyKind.LANG)
+            action == "onehand" -> {
+                oneHand = if (oneHand == 0) 2 else 0
+                savePref("one_hand", oneHand)
+                applyLook()
+                show(letters)
+            }
+            action == "onehand:switch" -> {
+                oneHand = if (oneHand == 1) 2 else 1
+                savePref("one_hand", oneHand)
+                applyLook()
+            }
+            action == "onehand:off" -> {
+                oneHand = 0
+                savePref("one_hand", 0)
+                applyLook()
+            }
+            action == "theme" -> {
+                val steps = if (photoFile().exists()) KeyboardTheme.NAMES.size else KeyboardTheme.NAMES.size - 1
+                themeMode = (themeMode + 1) % steps
+                savePref("theme", themeMode)
+                loadPhoto()
+                applyLook()
+                show(Layouts.menu(KeyboardTheme.NAMES[themeMode]))
+            }
+            action == "resize" -> {
+                sizeStep = (sizeStep + 1) % SIZES.size
+                savePref("size", sizeStep)
+                applyLook()
+            }
+            action == "edit" -> {
+                selecting = false
+                show(Layouts.edit(false))
+            }
+            action == "clipboard" -> showClipboard()
+            action == "convert" -> convertField()
+            action == "settings" -> openSettings()
+            action == "voice" -> startVoice()
+            action == "clip:clear" -> {
+                clips.clear()
+                ClipImages.clear(this)
+                thumbs.clear()
+                showClipboard()
+            }
+            action.startsWith("img:") -> {
+                val f = images.getOrNull(action.removePrefix("img:").toIntOrNull() ?: -1) ?: return
+                if (f.exists()) insertImage(f)
+            }
+            action == "image:pick" -> try {
+                startActivity(Intent(this, PickImageActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (_: Exception) {
+            }
+            action == "shots:enable" -> openSettings("shots")
+            action.startsWith("paste:") -> {
+                val clip = clips.getOrNull(action.removePrefix("paste:").toIntOrNull() ?: -1) ?: return
+                ic?.commitText(clip, 1)
+                show(letters)
+            }
+            action == "edit:select" -> {
+                selecting = !selecting
+                show(Layouts.edit(selecting))
+            }
+            action == "edit:left" -> moveKey(KeyEvent.KEYCODE_DPAD_LEFT)
+            action == "edit:right" -> moveKey(KeyEvent.KEYCODE_DPAD_RIGHT)
+            action == "edit:up" -> moveKey(KeyEvent.KEYCODE_DPAD_UP)
+            action == "edit:down" -> moveKey(KeyEvent.KEYCODE_DPAD_DOWN)
+            action == "edit:home" -> moveKey(KeyEvent.KEYCODE_MOVE_HOME)
+            action == "edit:end" -> moveKey(KeyEvent.KEYCODE_MOVE_END)
+            action == "edit:all" -> ic?.performContextMenuAction(android.R.id.selectAll)
+            action == "edit:copy" -> ic?.performContextMenuAction(android.R.id.copy)
+            action == "edit:cut" -> ic?.performContextMenuAction(android.R.id.cut)
+            action == "edit:paste" -> ic?.performContextMenuAction(android.R.id.paste)
+        }
+    }
+
+    override fun onGlide(path: List<Glide.P>, centers: Map<Char, Glide.P>, keyWidth: Float) {
+        val d = dict ?: return
+        val caseNow = shift
+        val id = ++requestId
+        // the search runs on the worker; the word is typed when it is ready
+        workerHandler.post {
+            val found = Glide.decode(path, centers, keyWidth, d)
+            mainHandler.post {
+                if (id != requestId || found.isEmpty()) return@post
+                val ic = currentInputConnection ?: return@post
+                val words = found.map {
+                    when (caseNow) {
+                        Shift.LOCKED -> it.word.uppercase(Locale.ROOT)
+                        Shift.ON -> it.word.replaceFirstChar { ch -> ch.uppercaseChar() }
+                        Shift.OFF -> it.word
+                    }
+                }.distinct()
+                val before = ic.getTextBeforeCursor(1, 0) ?: ""
+                val space = if (before.isNotEmpty() && (before.last().isLetterOrDigit() || before.last() in ".,!?;:")) " " else ""
+                undo.pending = null
+                autoUndo = null
+                glided = words
+                ic.commitText(space + words.first(), 1)
+                if (shift == Shift.ON) setShift(Shift.OFF)
+                view?.setSuggestions(words.take(3))
+            }
+        }
     }
 
     /** Capital letter at the start of a sentence, as the text field asks. */
@@ -277,6 +867,12 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     }
 
     companion object {
+        /** Token for the dictionary jobs on the worker thread. */
+        private val SUGGEST = Any()
+
+        /** Key heights of the "Ölçam" steps: normal, large, small. */
+        private val SIZES = floatArrayOf(1f, 1.12f, 0.88f)
+
         private val PASSWORD_VARIATIONS = setOf(
             InputType.TYPE_TEXT_VARIATION_PASSWORD,
             InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
