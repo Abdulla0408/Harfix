@@ -14,13 +14,12 @@ Paket nomi: **`uz.harfix.app`**. Play uchun **`play`** flavor’i yig‘iladi: u
   Unda shu xizmatsiz versiya yuboriladi: `play` flavor’idan xizmatni olib tashlash bir qatorlik ish,
   yoki `direct` AAB yig‘iladi. Advanced Protection yoqilgan telefonlarda bu xizmat umuman ishlamaydi.
 
-## 1. Imzo kaliti (bir marta)
+## 1. Imzo kaliti
 
-1. Kalit yarating va **kamida ikki joyda** saqlang (parol menejeri + flesh):
-   `keytool -genkeypair -v -keystore harfix-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias harfix`
-2. `android/keystore.properties` faylini yarating (`.gitignore` da, commit qilinmaydi). Tarkibi [README.md](README.md) da.
-3. Play Console’da **Play App Signing** yoqilgan bo‘lsin (yangi ilovalarda odatda yoqilgan).
-   Siz yaratgan kalit faqat *upload key* bo‘ladi: yo‘qolsa, Play orqali almashtirsa bo‘ladi.
+Kalit 2026-11-19 da yaratilgan: `harfix-release.jks` (alias `harfix`). U GitHub secret’larida turadi, imzolangan
+fayllarni `android-release` workflow yig‘adi ([README.md](README.md), «Imzolash»). Play’da shu kalit *upload key*
+bo‘ladi: birinchi yuklashda **Play App Signing → Google-generated key** ni tanlang. Upload key yo‘qolsa, Play
+orqali almashtirsa bo‘ladi. Saytdagi APK uchun esa almashtirib bo‘lmaydi.
 
 ## 2. Yig‘ish
 
@@ -31,6 +30,7 @@ cd android
 ```
 
 Har yangi yuborishda `versionCode` ni oshiring (`app/build.gradle.kts`). Hozir: 1.5.0, code 9.
+Imzolangan AAB va APK: GitHub → Actions → `android-release` → *Run workflow* → artifact `Harfix-android-release`.
 
 **GitHub orqali:** `android` workflow har push’da ikkala flavor’ni testlaydi va test APK’larini yig‘adi
 (Actions → android → Artifacts). Tekshiradi:
@@ -63,6 +63,8 @@ bilan solishtiring, SDK versiyasi o‘zgarganda ham):
 | Ma’lumot | Yig‘iladimi | Kim | Nima uchun |
 |---|---|---|---|
 | Yozilgan matn, fayllar, klaviatura kiritmasi | **Yo‘q** — hammasi telefonda | — | — |
+| Shaxsiy lug‘at, o‘rganilgan so‘zlar, bufer | **Yo‘q** — faqat telefonda | — | — |
+| Rasmlar (skrinshotlar buferda, «Rasm qo‘shish», klaviatura foni) | **Yo‘q** — faqat telefonda ishlanadi, yuborilmaydi | — | — |
 | Device or other IDs | Ha | Harfix: tasodifiy o‘rnatish raqami (kunlik anonim hisob, Sozlamalarda o‘chiriladi). Yandex: reklama identifikatori | Analytics; Advertising |
 | App interactions (reklama ko‘rish/bosish) | Ha | Yandex | Advertising |
 | Crash logs / diagnostics | Yandex hujjatiga qarang | Yandex | — |
@@ -110,16 +112,9 @@ Play Console → App content → **Accessibility API** → *Declare*. Inglizcha 
 
 ## 5. Store listing (Uzbek)
 
-- **App name** (30 belgigacha): `Harfix — yangi alifbo`
-- **Short description** (80 belgigacha): `Lotin va kirill matnni yangi oʻzbek alifbosiga oʻgiradi: ö ğ ş ç klaviaturasi`
-- **Full description:** saytdagi matnni va `desktop/msix/STORE.md` dagi tavsifni Android uchun moslang:
-  Harfix klaviaturasi, lug‘at va avto-tuzatish, chizib yozish, «Odatiy klaviaturada», belgilangan
-  matn menyusi, Word/Excel/PowerPoint fayllar. Oxirida: «Lugʻat: Vikipediya matnlari asosida (CC BY-SA 4.0)».
-- **Grafika:**
-  - ikona 512×512 PNG (`harfix-web/assets/icon-512.png`);
-  - feature graphic 1024×500;
-  - telefon skrinshotlari: kamida 2 ta, haqiqiy ilovadan, 1080×1920 kabi.
-  
+Tayyor matnlar va rasmlar: [play/listing.md](play/listing.md), `play/images/`. Qadamma-qadam yo‘riqnoma:
+[play/README.md](play/README.md).
+
   Microsoft Store’dagidek, skrinshotlar **ilovaning o‘zidan** olinishi kerak: maket yoki brauzerda
   chizilgan interfeys rad etiladi.
 
