@@ -20,33 +20,54 @@ import android.view.WindowInsets
 import java.util.Locale
 
 /**
- * Light and dark "liquid glass" colors: a soft gradient behind translucent keys with a bright
- * edge, like frosted glass.
+ * Keyboard looks. [style]: 0 light and 1 dark frosted glass; 2 Lojuvard, 3 Shafaq, 4 Tun and
+ * 5 the user's photo are "vivid": a rich background behind see-through glass keys and white
+ * letters.
  */
-class KeyboardTheme(dark: Boolean) {
-    val backgroundTop = if (dark) 0xFF1C222B.toInt() else 0xFFEDF1F7.toInt()
-    val backgroundBottom = if (dark) 0xFF0E1116.toInt() else 0xFFD6DEE9.toInt()
-    val key = if (dark) 0x38FFFFFF else 0xD9FFFFFF.toInt()
-    val keyPressed = if (dark) 0x66FFFFFF else 0xFFFFFFFF.toInt()
-    val func = if (dark) 0x1FFFFFFF else 0x73FFFFFF
-    val funcPressed = if (dark) 0x40FFFFFF else 0xB3FFFFFF.toInt()
-    val newLetter = if (dark) 0x66C9A23A else 0xCCFFE3A0.toInt()
-    val newLetterPressed = if (dark) 0x99C9A23A.toInt() else 0xFFFFD36B.toInt()
+class KeyboardTheme(val style: Int) {
+    val vivid = style >= 2
+    private val dark = style == 1
+
+    val backgroundTop = when (style) {
+        0 -> 0xFFEDF1F7
+        1 -> 0xFF1C222B
+        2 -> 0xFF2A4C8F
+        3 -> 0xFF3B1F5C
+        4 -> 0xFF0F2027
+        else -> 0xFF14181E
+    }.toInt()
+    val backgroundBottom = when (style) {
+        0 -> 0xFFD6DEE9
+        1 -> 0xFF0E1116
+        2 -> 0xFF0B1630
+        3 -> 0xFFC2570C
+        4 -> 0xFF2C5364
+        else -> 0xFF14181E
+    }.toInt()
+    val key = if (vivid) 0x33FFFFFF else if (dark) 0x38FFFFFF else 0xD9FFFFFF.toInt()
+    val keyPressed = if (vivid) 0x66FFFFFF else if (dark) 0x66FFFFFF else 0xFFFFFFFF.toInt()
+    val func = if (vivid) 0x1AFFFFFF else if (dark) 0x1FFFFFFF else 0x73FFFFFF
+    val funcPressed = if (vivid) 0x47FFFFFF else if (dark) 0x40FFFFFF else 0xB3FFFFFF.toInt()
+    val newLetter = if (vivid) 0x4DF2C14E else if (dark) 0x66C9A23A else 0xCCFFE3A0.toInt()
+    val newLetterPressed = if (vivid) 0x80F2C14E.toInt() else if (dark) 0x99C9A23A.toInt() else 0xFFFFD36B.toInt()
     /** The bright rim of the glass and its top highlight. */
-    val edge = if (dark) 0x2EFFFFFF else 0xB3FFFFFF.toInt()
-    val highlight = if (dark) 0x40FFFFFF else 0xFFFFFFFF.toInt()
-    val text = if (dark) 0xFFE8ECF1.toInt() else 0xFF10141A.toInt()
-    val hint = if (dark) 0xFF8B96A3.toInt() else 0xFF6D7885.toInt()
-    val shadow = if (dark) 0x40000000 else 0x1F1B2F5E
-    val popup = if (dark) 0xF22C323B.toInt() else 0xF7FFFFFF.toInt()
-    val popupBorder = if (dark) 0x40FFFFFF else 0x33000000
-    val strip = if (dark) 0xFFE8ECF1.toInt() else 0xFF1B2F5E.toInt()
-    val separator = if (dark) 0x26FFFFFF else 0x261B2F5E
+    val edge = if (vivid) 0x24FFFFFF else if (dark) 0x2EFFFFFF else 0xB3FFFFFF.toInt()
+    val highlight = if (vivid) 0x38FFFFFF else if (dark) 0x40FFFFFF else 0xFFFFFFFF.toInt()
+    val text = if (vivid || dark) 0xFFF4F6F8.toInt() else 0xFF10141A.toInt()
+    val hint = if (vivid) 0xB3FFFFFF.toInt() else if (dark) 0xFF8B96A3.toInt() else 0xFF6D7885.toInt()
+    val shadow = if (vivid) 0 else if (dark) 0x40000000 else 0x1F1B2F5E
+    val popup = if (vivid) 0xF0263040.toInt() else if (dark) 0xF22C323B.toInt() else 0xF7FFFFFF.toInt()
+    val popupBorder = if (vivid || dark) 0x40FFFFFF else 0x33000000
+    val strip = if (vivid || dark) 0xFFF4F6F8.toInt() else 0xFF1B2F5E.toInt()
+    val separator = if (vivid || dark) 0x33FFFFFF else 0x261B2F5E
 
     companion object {
         const val ACCENT = 0xFF1C6EF2.toInt()
         const val ACCENT_PRESSED = 0xFF1557C4.toInt()
         const val TRAIL = 0xCC1C6EF2.toInt()
+
+        /** Names of the menu's theme steps (the "theme" preference). */
+        val NAMES = listOf("Avto", "Yoruğ", "Qoronği", "Lojuvard", "Şafaq", "Tun", "Rasm")
     }
 }
 
@@ -84,7 +105,9 @@ class KeyboardView(context: Context) : View(context) {
     private val sp = resources.displayMetrics.scaledDensity
     private var navInset = 0
     private val keys = ArrayList<Pair<Key, RectF>>()
-    private var theme = KeyboardTheme(isDark())
+    private var theme = KeyboardTheme(
+        if (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES) 1 else 0,
+    )
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
@@ -143,10 +166,30 @@ class KeyboardView(context: Context) : View(context) {
     private var baseNode: Any? = null // a RenderNode; typed loosely so API 26-28 never loads the class
     private var baseDirty = true
 
-    private fun isDark() = when (themeMode) {
-        1 -> false
-        2 -> true
-        else -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+    private fun systemDark() =
+        resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+
+    /** The menu's theme step (0 auto ... 6 photo) as a [KeyboardTheme] style. */
+    private fun style(): Int = when (themeMode) {
+        0 -> if (systemDark()) 1 else 0
+        1 -> 0
+        2 -> 1
+        3 -> 2
+        4 -> 3
+        5 -> 4
+        else -> if (photo != null) 5 else 2
+    }
+
+    /** The user's background picture (theme step 6), or null. */
+    private var photo: android.graphics.Bitmap? = null
+    private val photoPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+
+    fun setPhoto(bitmap: android.graphics.Bitmap?) {
+        if (bitmap === photo) return
+        photo = bitmap
+        theme = KeyboardTheme(style())
+        baseDirty = true
+        invalidate()
     }
 
     /** One-handed mode, size and theme (from the menu). */
@@ -156,7 +199,7 @@ class KeyboardView(context: Context) : View(context) {
         this.scale = scale
         this.themeMode = themeMode
         if (!changed) return
-        theme = KeyboardTheme(isDark())
+        theme = KeyboardTheme(style())
         baseDirty = true
         requestLayout()
         computeKeys()
@@ -236,6 +279,10 @@ class KeyboardView(context: Context) : View(context) {
     private fun computeKeys() {
         keys.clear()
         if (width == 0) return
+        if (layout.name == "numpad") {
+            computeNumpad()
+            return
+        }
         val gapX = 3 * density
         val gapY = 5 * density
         var y = padTop + stripHeight
@@ -267,6 +314,50 @@ class KeyboardView(context: Context) : View(context) {
         } else {
             gutterSwitch.setEmpty()
             gutterOff.setEmpty()
+        }
+    }
+
+    /**
+     * The number pad (Layouts.numpad): a narrow arithmetic column, big digits, % ␣ ⌫ on the right
+     * and a bottom row, all in the letters' height.
+     */
+    private fun computeNumpad() {
+        letterWidth = 0f
+        gutterSwitch.setEmpty()
+        gutterOff.setEmpty()
+        val rows = layout.rows
+        if (rows.size < 4) return
+        val gapX = 3 * density
+        val gapY = 5 * density
+        val usable = width - padX * 2
+        val x0 = padX
+        val top = padTop + stripHeight
+        val kh = keyHeight()
+        val digitsH = 3.9f * kh
+        val u = usable / (0.75f + 3 * 1.35f + 0.9f)
+        fun add(k: Key, l: Float, t: Float, r: Float, b: Float) {
+            keys.add(k to RectF(l + gapX / 2, t + gapY / 2, r - gapX / 2, b - gapY / 2))
+        }
+        val ops = rows[0].keys
+        ops.forEachIndexed { i, k -> add(k, x0, top + digitsH * i / ops.size, x0 + 0.75f * u, top + digitsH * (i + 1) / ops.size) }
+        val dx = x0 + 0.75f * u
+        rows[1].keys.forEachIndexed { i, k ->
+            val col = i % 3
+            val row = i / 3
+            add(k, dx + col * 1.35f * u, top + row * digitsH / 3, dx + (col + 1) * 1.35f * u, top + (row + 1) * digitsH / 3)
+        }
+        val rx = dx + 3 * 1.35f * u
+        val side = rows[2].keys
+        side.forEachIndexed { i, k -> add(k, rx, top + digitsH * i / side.size, x0 + usable, top + digitsH * (i + 1) / side.size) }
+        val bottom = rows[3].keys
+        val widths = floatArrayOf(0.9f, 0.6f, 0.8f, 1.35f, 0.8f, 0.6f, 0.9f)
+        val total = bottom.indices.sumOf { widths.getOrElse(it) { 1f }.toDouble() }.toFloat()
+        var x = x0
+        val by = top + digitsH
+        bottom.forEachIndexed { i, k ->
+            val w = usable * widths.getOrElse(i) { 1f } / total
+            add(k, x, by, x + w, by + rows[3].height * kh)
+            x += w
         }
     }
 
@@ -418,7 +509,7 @@ class KeyboardView(context: Context) : View(context) {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        theme = KeyboardTheme(isDark())
+        theme = KeyboardTheme(style())
         baseDirty = true
         requestLayout()
     }
@@ -447,7 +538,7 @@ class KeyboardView(context: Context) : View(context) {
     /** A rounded glass pane: soft shadow, translucent fill, bright rim and a highlight on top. */
     private fun glass(c: Canvas, r: RectF, radius: Float, color: Int, shadow: Boolean) {
         val t = theme
-        if (shadow) {
+        if (shadow && t.shadow != 0) {
             fill.color = t.shadow
             val off = 1.5f * density
             c.drawRoundRect(r.left, r.top + off, r.right, r.bottom + off, radius, radius, fill)
@@ -506,7 +597,7 @@ class KeyboardView(context: Context) : View(context) {
     /** One key: its glass and its label; [down] while a finger is on it. */
     private fun drawKey(c: Canvas, k: Key, rect: RectF, down: Boolean) {
         val t = theme
-        val radius = 9 * density
+        val radius = if (k.kind in ROUND) minOf(rect.width(), rect.height()) / 2 else if (t.vivid) 12 * density else 9 * density
         val (normal, pressedColor) = when (k.kind) {
             KeyKind.CHAR, KeyKind.SPACE -> t.key to t.keyPressed
             KeyKind.NEW_LETTER -> t.newLetter to t.newLetterPressed
@@ -539,7 +630,11 @@ class KeyboardView(context: Context) : View(context) {
             KeyKind.SHIFT -> drawShift(c, cx, cy, s, color)
             KeyKind.BACKSPACE -> drawBackspace(c, cx, cy, s, color)
             KeyKind.ENTER -> drawEnter(c, cx, cy, s, color)
-            KeyKind.SPACE -> text(c, spaceLabel, cx, cy, textSize(k, r), t.hint, false)
+            KeyKind.SPACE -> if (layout.name == "numpad") {
+                text(c, "␣", cx, cy, 22 * sp, color, false)
+            } else {
+                text(c, spaceLabel, cx, cy, textSize(k, r), t.hint, false)
+            }
             KeyKind.GLOBE -> drawGlobe(c, cx, cy, s * 0.9f, color)
             KeyKind.NUMPAD -> drawNumpad(c, cx, cy, s, color)
             KeyKind.ACTION -> {
@@ -556,6 +651,17 @@ class KeyboardView(context: Context) : View(context) {
     /** The background and every key at rest: the part that changes only with the layout. */
     private fun drawBase(c: Canvas) {
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
+        val pic = photo
+        if (theme.style == 5 && pic != null) {
+            // centre-crop the picture to the keyboard, then darken it a little for the letters
+            val scale = maxOf(width.toFloat() / pic.width, height.toFloat() / pic.height)
+            val w = pic.width * scale
+            val h = pic.height * scale
+            val dst = RectF((width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2)
+            c.drawBitmap(pic, null, dst, photoPaint)
+            fill.color = 0x4D000000
+            c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), fill)
+        }
         for ((k, rect) in keys) drawKey(c, k, rect, false)
     }
 
@@ -998,6 +1104,8 @@ class KeyboardView(context: Context) : View(context) {
         private val SLIDE = setOf(KeyKind.CHAR, KeyKind.NEW_LETTER)
         private val PREVIEW = SLIDE
         private const val TOOLBAR_CELLS = 5
+        /** Round keys, as on modern keyboards. */
+        private val ROUND = setOf(KeyKind.ENTER, KeyKind.SYMBOLS, KeyKind.LETTERS)
         private val REPEAT = setOf("edit:left", "edit:right", "edit:up", "edit:down")
     }
 }

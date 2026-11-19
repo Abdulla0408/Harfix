@@ -167,14 +167,18 @@ object Layouts {
         false,
     )
 
-    /** The number pad from ?123: big digits, arithmetic on the left; ?123 goes back. */
+    /**
+     * The number pad from ?123. Its rows are groups that the view lays out as a pad: [0] the
+     * arithmetic column on the left, [1] the digits 1-9, [2] % space ⌫ on the right, [3] the
+     * bottom row. The heights add up to the letters' height (only the digits and bottom count).
+     */
     fun numpad() = Layout(
         "numpad",
         listOf(
-            Row(listOf(Key("+", alts = listOf("±")), Key("1", width = 1.3f), Key("2", width = 1.3f), Key("3", width = 1.3f), Key("%", alts = listOf("‰")))),
-            Row(listOf(Key("-", alts = listOf("=", "_")), Key("4", width = 1.3f), Key("5", width = 1.3f), Key("6", width = 1.3f), Key("⌫", KeyKind.BACKSPACE))),
-            Row(listOf(Key("*", alts = listOf("/", "×", "÷")), Key("7", width = 1.3f), Key("8", width = 1.3f), Key("9", width = 1.3f), Key(" ", KeyKind.SPACE))),
-            Row(listOf(Key("?123", KeyKind.SYMBOLS), Key(",", width = 1.3f), Key("0", width = 1.3f), Key(".", width = 1.3f), Key("⏎", KeyKind.ENTER))),
+            Row(listOf(Key("+", alts = listOf("±")), Key("-", alts = listOf("_")), Key("*", alts = listOf("×")), Key("/", alts = listOf("÷"))), 0f),
+            Row(keys("1 2 3 4 5 6 7 8 9"), 3.9f),
+            Row(listOf(Key("%", alts = listOf("‰")), Key(" ", KeyKind.SPACE), Key("⌫", KeyKind.BACKSPACE)), 0f),
+            Row(listOf(Key("ABC", KeyKind.LETTERS), Key(","), Key("!?#", KeyKind.SYMBOLS), Key("0"), Key("="), Key("."), Key("⏎", KeyKind.ENTER)), 0.92f),
         ),
         "",
         false,
@@ -205,12 +209,12 @@ object Layouts {
     private const val PANEL_ROW = PANEL_HEIGHT / 4
     private const val CLIP_ROW = (PANEL_HEIGHT - 1f) / 5
 
-    /** The menu: what the keyboard can do besides typing. */
-    fun menu() = Layout(
+    /** The menu: what the keyboard can do besides typing; [theme] is the current theme's name. */
+    fun menu(theme: String = "") = Layout(
         "menu",
         listOf(
             Row(listOf(act("🌐  Keyingi til", "lang"), act("✋  Bir qöl", "onehand")), PANEL_ROW),
-            Row(listOf(act("🎨  Mavzu", "theme"), act("✍️  Tahrirlaş", "edit")), PANEL_ROW),
+            Row(listOf(act(if (theme.isEmpty()) "🎨  Mavzu" else "🎨  Mavzu: $theme", "theme"), act("✍️  Tahrirlaş", "edit")), PANEL_ROW),
             Row(listOf(act("🔤  Ögiriş", "convert"), act("📋  Bufer", "clipboard")), PANEL_ROW),
             Row(listOf(act("↕️  Ölçam", "resize"), act("⚙️  Sozlamalar", "settings")), PANEL_ROW),
         ),

@@ -82,6 +82,7 @@ class SuggestTest {
         val known = Suggest.forWord(dict, null, "bilan")
         assertNull(known.autocorrect)
         assertEquals("bilan", known.words.first())
+        assertFalse(known.words.any { it.startsWith(Suggest.ADD) }) // nothing to add
         assertNull(Suggest.forWord(dict, null, "xyzqw").autocorrect) // nothing close
         assertNull(Suggest.forWord(dict, null, "a").autocorrect) // too short to judge
         assertEquals(Suggest.EMPTY, Suggest.forWord(dict, null, "abc123"))
@@ -93,7 +94,34 @@ class SuggestTest {
     fun showsTheTypedWordNextToTheCorrection() {
         val r = Suggest.forWord(dict, null, "ucun")
         assertEquals("uçun", r.words.first())
+        assertEquals(Suggest.ADD + "ucun", r.words[1]) // keep it and add it to the dictionary
         assertTrue(r.words.size <= 3)
+        assertTrue(Suggest.forWord(dict, null, "xyzqw").words.contains(Suggest.ADD + "xyzqw"))
+    }
+
+    @Test
+    fun usersOwnDictionary() {
+        val words = Files.createTempFile("words", ".txt").toFile()
+        val own = Files.createTempFile("dict", ".txt").toFile()
+        val user = UserWords(words, own)
+        assertNotNull(Suggest.forWord(dict, user, "ucun").autocorrect)
+        assertTrue(user.add("ucun"))
+        assertTrue(user.add("Harfix"))
+        assertFalse(user.add("abc123")) // not a word
+        assertFalse(user.add("x"))
+        assertTrue(user.knows("ucun")) // known at once, no need to type it twice
+        assertNull(Suggest.forWord(dict, user, "ucun").autocorrect)
+        assertFalse(Suggest.forWord(dict, user, "ucun").words.any { it.startsWith(Suggest.ADD) })
+        assertTrue(Suggest.forWord(dict, user, "harf").words.contains("Harfix")) // as written
+        val again = UserWords(words, own)
+        again.loadDictionary()
+        assertEquals(listOf("ucun", "Harfix"), again.dictionary())
+        again.remove("UCUN")
+        assertEquals(listOf("Harfix"), again.dictionary())
+        val third = UserWords(words, own)
+        third.loadDictionary()
+        assertFalse(third.knows("ucun"))
+        assertTrue(third.knows("harfix"))
     }
 
     @Test

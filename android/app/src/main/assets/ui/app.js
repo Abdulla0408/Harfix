@@ -391,6 +391,57 @@
     $("qnext").textContent = L("Qaytadan boshlash");
   });
 
+  // --- invite to the Harfix keyboard, keyboard background, personal dictionary, feedback --------
+  var onboardLater = false; // "Keyinroq": not again until the app is opened next time
+  function paintExtras() {
+    var k = state.keyboard || {};
+    $("kbd-onboard").hidden = onboardLater || !!k.selected;
+    $("ob-step1").classList.toggle("done", !!k.enabled);
+    $("ob-enable").textContent = k.enabled ? L("✓ Yoqilgan") : L("Yoqish");
+    $("ob-choose").disabled = !k.enabled;
+    $("bg-clear").hidden = !state.keyboard_bg;
+    paintDict();
+  }
+  var basePaintAll = paintAll;
+  paintAll = function () { basePaintAll(); paintExtras(); };
+  $("ob-enable").addEventListener("click", function () { A.keyboardSettings(); });
+  $("ob-choose").addEventListener("click", function () { A.keyboardPicker(); });
+  $("ob-later").addEventListener("click", function () { onboardLater = true; $("kbd-onboard").hidden = true; });
+  $("bg-pick").addEventListener("click", function () { if (A.pickKeyboardBackground) A.pickKeyboardBackground(); });
+  $("bg-clear").addEventListener("click", function () {
+    if (A.clearKeyboardBackground) A.clearKeyboardBackground();
+    refresh();
+  });
+  $("feedback").addEventListener("click", function () { A.openUrl("https://t.me/a33208"); });
+
+  function paintDict() {
+    var words = [];
+    try { words = JSON.parse(A.userDict ? A.userDict() : "[]"); } catch (e) { words = []; }
+    var box = $("dict-list");
+    box.innerHTML = "";
+    words.forEach(function (w) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      b.textContent = w + "  ✕";
+      b.addEventListener("click", function () { A.removeUserWord(w); paintDict(); });
+      box.appendChild(b);
+    });
+    if (!words.length) box.innerHTML = '<span class="hint">' + esc(L("Hozircha boʻsh")) + "</span>";
+  }
+  $("dict-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("dict-input").value.trim();
+    if (!v || !A.addUserWord) return;
+    if (A.addUserWord(v)) {
+      $("dict-input").value = "";
+      paintDict();
+      toast(L("Lugʻatga qoʻshildi"));
+    } else {
+      toast(L("Bu soʻz emas: faqat harflar (2–30 ta)"));
+    }
+  });
+
   paintAll();
   loadOnline();
   A.ready();

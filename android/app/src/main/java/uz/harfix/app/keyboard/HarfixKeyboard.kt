@@ -19,6 +19,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import android.widget.Toast
 import uz.harfix.app.Converter
 import uz.harfix.app.Online
 import java.io.File
@@ -89,9 +90,10 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
             getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
         } catch (_: Exception) {
         }
-        user = UserWords(File(filesDir, UserWords.FILE))
+        user = UserWords(File(filesDir, UserWords.FILE), File(filesDir, UserWords.DICT_FILE))
         workerHandler.post {
             user.load()
+            user.loadDictionary()
             try {
                 dict = assets.open("dict/uz.txt").use { main ->
                     assets.open("dict/uz-extra.txt").use { extra -> Dictionary.load(main, extra) }
@@ -137,6 +139,7 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         v.setLook(oneHand, SIZES[sizeStep], themeMode)
         v.setLayout(current)
         view = v
+        photoStamp = 0L // the new view has no picture yet
         return v
     }
 
@@ -169,8 +172,10 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         if (!learn) user.clear()
         oneHand = p.getInt("one_hand", 0)
         sizeStep = p.getInt("size", 0)
-        themeMode = p.getInt("theme", 0)
+        themeMode = p.getInt("theme", 0).coerceIn(0, KeyboardTheme.NAMES.size - 1)
         selecting = false
+        workerHandler.post { user.loadDictionary() }
+        loadPhoto()
         stripAllowed = liveField && live && (autocorrect || glide)
         autoUndo = null
         glided = null
@@ -485,6 +490,13 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
 
     override fun onSuggestion(text: String) {
         val ic = currentInputConnection ?: return
+        if (text.startsWith(Suggest.ADD)) {
+            val word = text.removePrefix(Suggest.ADD)
+            if (user.add(word)) Toast.makeText(this, "«$word» luğatga qöşildi", Toast.LENGTH_SHORT).show()
+            cached = null
+            onSuggestion(word)
+            return
+        }
         val (head, tail) = wordAt(ic)
         ic.beginBatchEdit()
         if (head.isNotEmpty() || tail.isNotEmpty()) ic.deleteSurroundingText(head.length, tail.length)
@@ -519,6 +531,31 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     }
 
     private fun savePref(key: String, value: Int) = prefs().edit().putInt(key, value).apply()
+
+    /** The background picture the app saves ("Klaviatura foni"). */
+    private fun photoFile() = File(filesDir, "keyboard_bg.jpg")
+    private var photoStamp = 0L
+
+    /** Loads the picture for the "Rasm" theme (on the worker), or drops it. */
+    private fun loadPhoto() {
+        val f = photoFile()
+        if (themeMode != KeyboardTheme.NAMES.size - 1 || !f.exists()) {
+            photoStamp = 0L
+            view?.setPhoto(null)
+            return
+        }
+        val stamp = f.lastModified()
+        if (stamp == photoStamp) return
+        photoStamp = stamp
+        workerHandler.post {
+            val bmp = try {
+                android.graphics.BitmapFactory.decodeFile(f.path)
+            } catch (_: Throwable) {
+                null
+            }
+            mainHandler.post { view?.setPhoto(bmp) }
+        }
+    }
 
     private fun applyLook() {
         view?.setLook(oneHand, SIZES[sizeStep], themeMode)
@@ -579,7 +616,7 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
         val ic = currentInputConnection
         when {
             action == "back" -> show(letters)
-            action == "menu" -> show(if (current.name == "menu") letters else Layouts.menu())
+            action == "menu" -> show(if (current.name == "menu") letters else Layouts.menu(KeyboardTheme.NAMES[themeMode]))
             action == "lang" -> onKey(KeyKind.LANG)
             action == "onehand" -> {
                 oneHand = if (oneHand == 0) 2 else 0
@@ -598,9 +635,12 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
                 applyLook()
             }
             action == "theme" -> {
-                themeMode = (themeMode + 1) % 3
+                val steps = if (photoFile().exists()) KeyboardTheme.NAMES.size else KeyboardTheme.NAMES.size - 1
+                themeMode = (themeMode + 1) % steps
                 savePref("theme", themeMode)
+                loadPhoto()
                 applyLook()
+                show(Layouts.menu(KeyboardTheme.NAMES[themeMode]))
             }
             action == "resize" -> {
                 sizeStep = (sizeStep + 1) % SIZES.size
