@@ -14,6 +14,7 @@ import com.yandex.mobile.ads.common.YandexAds
 /**
  * The banner under the page. The web page decides (from the online config) whether and
  * which ad unit to show, through HarfixAndroid.showBanner / hideBanner.
+ * Website APK only: the Google Play build has its own BannerAds (src/play) that shows nothing.
  */
 class BannerAds(private val activity: MainActivity, private val container: FrameLayout) {
     private var view: BannerAdView? = null
@@ -76,6 +77,8 @@ class BannerAds(private val activity: MainActivity, private val container: Frame
     }
 
     companion object {
+        /** This build may show ads (banner and sponsor card), if the online config turns them on. */
+        const val ENABLED = true
         @Volatile private var initialized = false
     }
 }

@@ -26,13 +26,10 @@ Harfix — yangi oʻzbek lotin alifbosida (ö, ğ, ş, ç) oson yozish uchun kla
 • Lugʻat va avto-tuzatish: 80 mingdan ortiq soʻz. Xato yozilgan soʻzni tuzatadi, tepada uchta soʻz taklif qiladi.
 • Shaxsiy lugʻat: lugʻatda yoʻq soʻzni «＋» bilan bir bosishda qoʻshasiz.
 • Chizib yozish: barmoqni harflar ustidan uzmasdan yurgizing — soʻz oʻzi yoziladi.
-• Bufer: nusxalangan matnlar, yangi skrinshotlar va telefondagi rasmlar bir bosishda chatga.
+• Bufer: nusxalangan matnlar va telefondagi rasmlar bir bosishda chatga.
 • Matnni tahrirlash paneli, bir qoʻl rejimi, klaviatura oʻlchami, raqamlar paneli.
 • Mavzular: yorugʻ, qorongʻi, Lojuvard, Shafaq, Tun yoki klaviatura orqasida oʻz rasmingiz.
 • Lotin, oʻzbek kirill va rus klaviaturalari, bitta tugma bilan almashadi.
-
-⌨️ ODATIY KLAVIATURADA
-Gboard yoki Samsung klaviaturasidan voz kechmoqchi emasmisiz? «Odatiy klaviaturada» xizmatini yoqing: oʻ, gʻ, sh, ch yozilishi bilan oʻsha joyning oʻzida ö, ğ, ş, ç ga almashadi. Parol, e-mail va sayt manzili maydonlariga tegmaydi.
 
 🔤 OʻGIRGICH
 • Lotin va kirill matnni yangi alifboga, eski lotinga yoki kirillga bir zumda oʻgiradi.
@@ -57,7 +54,7 @@ Lugʻat Vikipediya matnlari asosida tuzilgan (CC BY-SA 4.0).
 Birinchi Google Play versiyasi:
 • Lugʻat, avto-tuzatish va soʻz takliflari, shaxsiy lugʻat
 • Chizib yozish
-• Bufer: matnlar, skrinshotlar, «Rasm qoʻshish»
+• Bufer: matnlar va «Rasm qoʻshish»
 • Matnni tahrirlash, bir qoʻl rejimi, raqamlar paneli
 • Yangi koʻrinish va mavzular, oʻz rasmingiz fon boʻlib
 </uz>

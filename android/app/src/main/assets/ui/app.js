@@ -301,6 +301,7 @@
     // First run: nothing on yet. Later: warn if Android switched the word service off.
     var words = state.words_available !== false; // the website APK has no word service
     $("step-words").closest(".card").hidden = !words;
+    $("set-shots").hidden = state.shots_available === false; // the Google Play build has no photos permission
     $("setup-card").hidden = !!(state.words || k.selected || state.words_seen);
     $("words-off").hidden = !(state.words_seen && !state.words);
     if (state.words) $("words-guide").hidden = true; // switched on: the guide is done
@@ -323,9 +324,11 @@
   function loadOnline() {
     var o;
     try { o = JSON.parse(A.online()); } catch (e) { return; }
+    $("privacy-ads").hidden = o.ads === false; // the Google Play build has no ad SDK
     if (!window.HarfixOnline) return;
     var p = HarfixOnline.plan(o.config, { platform: o.platform, version: o.version, installDays: o.install_days,
       fresh: o.fresh, dismissed: o.dismissed });
+    if (o.ads === false) { p.sponsor = null; p.banner = null; } // Google Play build: declared "no ads"
     HarfixOnline.render(p, { top: $("online-top"), ad: $("online-ad"), L: L,
       open: function (url) { A.openUrl(url); },
       dismiss: function (id) { A.dismiss(id); } });

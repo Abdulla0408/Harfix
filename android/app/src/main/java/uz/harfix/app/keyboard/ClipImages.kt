@@ -89,6 +89,19 @@ object ClipImages {
 
     fun canReadShots(ctx: Context): Boolean = ctx.checkSelfPermission(PERMISSION) == PackageManager.PERMISSION_GRANTED
 
+    /**
+     * Does this build have "Skrinshotlar buferda" at all? Only the website APK asks for the photos
+     * permission (src/direct/AndroidManifest.xml); the Google Play build hides the switch and the
+     * clipboard panel's offer, and "Rasm qöşiş" (the system picker) works in both.
+     */
+    fun shotsSupported(ctx: Context): Boolean = try {
+        @Suppress("DEPRECATION")
+        val info = ctx.packageManager.getPackageInfo(ctx.packageName, PackageManager.GET_PERMISSIONS)
+        info.requestedPermissions?.contains(PERMISSION) == true
+    } catch (e: Exception) {
+        false
+    }
+
     /** Is this file in the phone's gallery a screenshot? (by folder or by name) */
     fun isScreenshot(name: String?, path: String?): Boolean =
         path?.contains("screenshot", ignoreCase = true) == true || name?.startsWith("screenshot", ignoreCase = true) == true

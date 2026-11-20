@@ -4,7 +4,7 @@ import uz.harfix.app.keyboard.Live
 
 /**
  * What "Odatiy klaviaturada" does with one change of a text field, as plain logic (tested
- * without Android). The service (WordsService, play flavor) reads the field, asks [onChange],
+ * without Android). The service (WordsService, not shipped now: see [Words]) reads the field, asks [onChange],
  * and writes back the [Edit] it gets.
  *
  * - Live ("Darhol" on): when the second letter of oʻ gʻ sh ch is typed, the pair becomes

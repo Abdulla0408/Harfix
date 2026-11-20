@@ -64,6 +64,7 @@ class Bridge(private val a: MainActivity) {
             .put("words_seen", p.getBoolean("words_seen", false))
             .put("words_available", Words.available(a))
             .put("words_ok", p.getBoolean("words_ok", false))
+            .put("shots_available", uz.harfix.app.keyboard.ClipImages.shotsSupported(a))
             .put("restricted", restricted)
             .put("keyboard_bg", a.keyboardBackground().exists())
             .toString()
@@ -206,6 +207,7 @@ class Bridge(private val a: MainActivity) {
             .put("config", Online.savedConfig(a) ?: JSONObject.NULL)
             .put("fresh", fresh)
             .put("platform", "android")
+            .put("ads", BannerAds.ENABLED) // false in the Google Play build: no banner, no sponsor card
             .put("version", info.versionName)
             .put("install_days", days)
             .put("dismissed", JSONArray(dismissed.toList()))

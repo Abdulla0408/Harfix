@@ -44,7 +44,7 @@ jobs:
           } > keystore.properties
 
       - name: Tests, website APK and Google Play bundle
-        run: ./gradlew --no-daemon testDirectReleaseUnitTest assembleDirectRelease bundlePlayRelease
+        run: ./gradlew --no-daemon testDirectReleaseUnitTest testPlayReleaseUnitTest assembleDirectRelease bundlePlayRelease
 
       - name: Signature, 16 KB pages and permissions
         run: |
@@ -53,6 +53,17 @@ jobs:
           "$BT/apksigner" verify --verbose --print-certs "$apk" | grep -E "Verified using|Signer #1 certificate (DN|SHA-256)"
           "$BT/zipalign" -c -P 16 -v 4 "$apk" > zipalign.txt || { grep -v "(OK" zipalign.txt | tail -20; exit 1; }
           "$BT/aapt2" dump badging "$apk" | grep -E "^package:|uses-permission"
+
+      - name: Google Play bundle stays plain (no photos permission, ads or accessibility service)
+        run: |
+          # the bundle's manifest is protobuf, but its strings are plain text
+          found=$(unzip -p app/build/outputs/bundle/playRelease/app-play-release.aab base/manifest/AndroidManifest.xml |
+            grep -a -o -E "READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE|permission\.AD_ID|BIND_ACCESSIBILITY_SERVICE|com\.yandex" | sort -u || true)
+          if [ -n "$found" ]; then
+            echo "::error::The Play bundle must not have: $found (android/PLAY.md, section 0)"
+            exit 1
+          fi
+          echo "Play bundle manifest: OK"
 
       - name: Name the files
         run: |

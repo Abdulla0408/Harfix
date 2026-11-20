@@ -28,10 +28,12 @@ android {
         versionName = "1.5.0"
     }
 
-    // direct: the APK on harfix.uz and Telegram. No accessibility service, so Google Play Protect
-    //         does not block it when it is installed from a file.
-    // play:   the Google Play bundle. Adds "Odatiy klaviaturada" (WordsService + WordsTile,
-    //         declared in src/play/AndroidManifest.xml).
+    // direct: the APK on harfix.uz and Telegram. Adds the photos permission ("Skrinshotlar
+    //         buferda") and the Yandex ad banner (src/direct). No accessibility service, so
+    //         Google Play Protect does not block it when it is installed from a file.
+    // play:   the Google Play bundle, kept plain for review: no photos permission, no ad SDK,
+    //         no accessibility service (android/PLAY.md, section 0). Bringing ads back to Play
+    //         means an update plus new Ads / Data safety / trader answers in Play Console.
     flavorDimensions += "store"
     productFlavors {
         create("direct") { dimension = "store" }
@@ -111,7 +113,8 @@ kotlin {
 }
 
 dependencies {
-    implementation("com.yandex.android:mobileads:8.6.0")
+    // Website APK only; the Play build's BannerAds (src/play) shows nothing.
+    "directImplementation"("com.yandex.android:mobileads:8.6.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

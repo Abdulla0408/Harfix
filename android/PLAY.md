@@ -1,18 +1,32 @@
 # Harfix — Google Play
 
-Paket nomi: **`uz.harfix.app`**. Play uchun **`play`** flavor’i yig‘iladi: unda «Odatiy klaviaturada»
-(accessibility xizmati) bor. Saytdagi APK — **`direct`** flavor’i, unda bu xizmat yo‘q.
+Paket nomi: **`uz.harfix.app`**. Play uchun **`play`** flavor’i yig‘iladi. Saytdagi APK — **`direct`** flavor’i.
 
-## 0. Bilish kerak bo‘lgan ikki narsa
+| | Play (`play`) | Sayt (`direct`) |
+|---|---|---|
+| Rasmlar ruxsati, «Skrinshotlar buferda» | yo‘q | bor |
+| Yandex reklama SDK’si, homiy kartasi | yo‘q | bor (onlayn sozlama yoqsa) |
+| «Odatiy klaviaturada» (accessibility xizmati) | yo‘q | yo‘q |
+| «Rasm qo‘shish», klaviatura foni (tizim rasm tanlagichi) | bor | bor |
+
+## 0. Bilish kerak bo‘lgan narsalar
 
 - **Yangi shaxsiy akkaunt bo‘lsa, yopiq test majburiy.** 2023-yil noyabridan keyin ochilgan shaxsiy
   (Personal) dasturchi akkauntlarida Production’ga chiqishdan oldin **kamida 12 tester bilan 14 kun
   yopiq test (Closed testing)** o‘tkazish kerak. Tashkilot (Organization) akkauntlariga bu talab qo‘yilmaydi.
-- **«Odatiy klaviaturada» Play tekshiruvidan o‘tmasligi mumkin.** U Accessibility API’dan foydalanadi,
-  Harfix esa nogironligi bor foydalanuvchilar uchun vosita emas (`isAccessibilityTool="false"`).
-  Shuning uchun Play Console’da deklaratsiya va video kerak (4-bo‘lim). Google uni rad etishi mumkin.
-  Unda shu xizmatsiz versiya yuboriladi: `play` flavor’idan xizmatni olib tashlash bir qatorlik ish,
-  yoki `direct` AAB yig‘iladi. Advanced Protection yoqilgan telefonlarda bu xizmat umuman ishlamaydi.
+- **Play versiyasi ataylab sodda (2026-11-20).** Birinchi tekshiruv tez va rad etilmasdan o‘tishi uchun
+  unda rasmlar ruxsati (`READ_MEDIA_IMAGES`), reklama SDK’si va accessibility xizmati yo‘q. Shuning uchun
+  *Photo and video permissions* va *Accessibility API* deklaratsiyalari kerak emas, *Ads* — **No**.
+  `android-release` workflow’i AAB’da bular yo‘qligini tekshiradi.
+- **Reklamani keyin Play’da yoqish** — yangilanish bilan: `"directImplementation"` → `implementation`
+  (`app/build.gradle.kts`), `src/direct` dagi `BannerAds.kt` va provayderlarni `main` ga, workflow
+  tekshiruvidan `com.yandex` va `AD_ID` ni olib tashlang. **O‘sha yangilanish bilan birga** Play Console’da:
+  *Ads* → Yes, *Advertising ID* → Yes, Data safety’ga Yandex qatorlari (pastdagi «Reklama qaytsa»),
+  akkaunt sozlamalarida **trader status** → trader (manzil Yevropa foydalanuvchilariga ochiq ko‘rinadi).
+  Reklamani onlayn sozlama bilan, formalarsiz yoqib bo‘lmaydi: Play versiyasi `ads: false` deydi va
+  banner ham, homiy kartasi ham ko‘rsatmaydi.
+- **«Odatiy klaviaturada»** (accessibility) uchun Google deklaratsiya va video so‘raydi va ko‘pincha rad
+  etadi (4-bo‘lim). Xizmat fayllari git tarixida (`src/play`, 2026-11-20 gacha); qaytarish kerak bo‘lsa, 4-bo‘lim.
 
 ## 1. Imzo kaliti
 
@@ -48,35 +62,40 @@ Imzolangan AAB va APK: GitHub → Actions → `android-release` → *Run workflo
 |---|---|
 | Privacy policy | `https://harfix.uz/maxfiylik/` |
 | App access | Hamma funksiyalar akkauntsiz ishlaydi |
-| Ads | **Yes** — Yandex Mobile Ads banneri (onlayn sozlama yoqsa) |
+| Ads | **No** — Play versiyasida reklama SDK’si yo‘q (0-bo‘lim) |
 | Content rating | IARC so‘rovnomasi: Utility/Productivity, hamma savolga *No* |
-| Target audience | **13+** (13–15, 16–17, 18+). 13 yoshdan kichiklarni belgilamang: reklama SDK’si Families dasturida emas |
+| Target audience | **13+** (13–15, 16–17, 18+). 13 yoshdan kichiklarni belgilamang: Families siyosati qo‘shimcha talablar qo‘yadi, reklama qaytsa SDK ham Families dasturida emas |
 | News app | No |
 | Data safety | Pastdagi jadval |
-| Advertising ID | **Yes**, reklama uchun. CI’dagi ruxsatlar ro‘yxatida `com.google.android.gms.permission.AD_ID` bo‘lsa, albatta *Yes* |
-| Accessibility API | 4-bo‘lim |
+| Advertising ID | **No** — Play AAB’da `AD_ID` ruxsati yo‘q (workflow tekshiradi) |
+| Accessibility API | Kerak emas: Play versiyasida xizmat yo‘q |
 | Government / Financial / Health | No |
 
-**Data safety** (Yandex SDK qismini Yandex Mobile Ads hujjatlaridagi «Google Play Data safety» bo‘limi
-bilan solishtiring, SDK versiyasi o‘zgarganda ham):
+**Data safety** (Play versiyasi uchun):
 
 | Ma’lumot | Yig‘iladimi | Kim | Nima uchun |
 |---|---|---|---|
 | Yozilgan matn, fayllar, klaviatura kiritmasi | **Yo‘q** — hammasi telefonda | — | — |
 | Shaxsiy lug‘at, o‘rganilgan so‘zlar, bufer | **Yo‘q** — faqat telefonda | — | — |
-| Rasmlar (skrinshotlar buferda, «Rasm qo‘shish», klaviatura foni) | **Yo‘q** — faqat telefonda ishlanadi, yuborilmaydi | — | — |
-| Device or other IDs | Ha | Harfix: tasodifiy o‘rnatish raqami (kunlik anonim hisob, Sozlamalarda o‘chiriladi). Yandex: reklama identifikatori | Analytics; Advertising |
-| App interactions (reklama ko‘rish/bosish) | Ha | Yandex | Advertising |
-| Crash logs / diagnostics | Yandex hujjatiga qarang | Yandex | — |
+| Rasmlar («Rasm qo‘shish», klaviatura foni) | **Yo‘q** — faqat telefonda ishlanadi, yuborilmaydi | — | — |
+| Device or other IDs | Ha | Harfix: tasodifiy o‘rnatish raqami (kunlik anonim hisob, Sozlamalarda o‘chiriladi) | Analytics |
 
-- Ma’lumot uchinchi tomonga beriladimi: **Ha** — Yandex (reklama).
+- Ma’lumot uchinchi tomonga beriladimi: **Yo‘q**.
 - Ma’lumot uzatishda shifrlanadimi: **Ha** (HTTPS).
 - O‘chirishni so‘rash mumkinmi: anonim hisob Sozlamalarda o‘chiriladi, bog‘lanish Telegram bot `/fikr` orqali.
 
-### Rasmlar ruxsati (`READ_MEDIA_IMAGES`)
+**Reklama qaytsa** (0-bo‘lim), jadvalga Yandex qo‘shiladi (Yandex Mobile Ads hujjatidagi «Google Play
+Data safety» bo‘limi bilan solishtiring): *Device or other IDs* — reklama identifikatori (Advertising),
+*App interactions* — reklama ko‘rish/bosish (Advertising), *Crash logs* — Yandex hujjatiga qarang;
+uchinchi tomonga beriladimi — **Ha**, Yandex.
 
-«Skrinshotlar buferda» uchun klaviatura yangi skrinshotlarni koʻrishi kerak. Play Console →
-App content → **Photo and video permissions** → *Declare*. Inglizcha matn:
+### Rasmlar ruxsati (`READ_MEDIA_IMAGES`) — faqat saytdagi APK’da
+
+Play versiyasida bu ruxsat va «Skrinshotlar buferda» yo‘q (0-bo‘lim), shuning uchun deklaratsiya kerak emas.
+Keyin Play’ga qo‘shilsa: ruxsat qatorlarini `src/direct/AndroidManifest.xml` dan `src/main` ga ko‘chiring
+va workflow tekshiruvidan olib tashlang. Google bu ruxsatni faqat rasmlar asosiy vazifa bo‘lgan ilovalarga
+beradi, shuning uchun rad etilishi ehtimoli katta. Play Console → App content → **Photo and video
+permissions** → *Declare*. Inglizcha matn:
 
 > Harfix Keyboard shows the screenshot the user has just taken in its clipboard panel and on the
 > clipboard, so it can be pasted into a chat in one tap (like the clipboard of other keyboards).
@@ -85,12 +104,13 @@ App content → **Photo and video permissions** → *Declare*. Inglizcha matn:
 > never uploads them. The system photo picker cannot do this, because it needs a user action for
 > every picture, and the point of the feature is that a new screenshot is ready without one.
 
-Data safety’da rasmlar **yigʻilmaydi** (faqat telefonda ishlanadi). Rad etilsa: ikkala
-`uses-permission` qatorini `src/main/AndroidManifest.xml` dan `src/direct/AndroidManifest.xml` ga
-koʻchiring. Play versiyasida «Rasm qoʻshish» (tizim rasm tanlagichi, ruxsatsiz) qoladi.
+Data safety’da rasmlar **yigʻilmaydi** (faqat telefonda ishlanadi).
 
-## 4. Accessibility API deklaratsiyasi (`play` flavor)
+## 4. Accessibility API deklaratsiyasi — hozir kerak emas
 
+Play versiyasida «Odatiy klaviaturada» yo‘q (0-bo‘lim). Qaytarish uchun: `WordsService.kt`, `WordsTile.kt`
+va `src/play/AndroidManifest.xml` ni git tarixidan tiklang (2026-11-20 gacha bo‘lgan `main`), `PlayBuildTest`
+ga xizmat testini qaytaring, workflow tekshiruvidan `BIND_ACCESSIBILITY_SERVICE` ni olib tashlang. Keyin
 Play Console → App content → **Accessibility API** → *Declare*. Inglizcha matn:
 
 > Harfix converts Uzbek text to the new Latin alphabet (law O'RQ-1184: oʻ→ö, gʻ→ğ, sh→ş, ch→ç). The
@@ -128,9 +148,11 @@ Tayyor matnlar va rasmlar: [play/listing.md](play/listing.md), `play/images/`. Q
 
 | Xabar | Yechim |
 |---|---|
-| Accessibility API policy | Deklaratsiya va video (4-bo‘lim). Rad etilsa, xizmatsiz AAB yuboring |
+| Accessibility API policy | Play versiyasida xizmat yo‘q. Qaytarilsa: deklaratsiya va video (4-bo‘lim) |
+| Photo and video permissions | Play versiyasida ruxsat yo‘q. Qo‘shilsa: deklaratsiya (3-bo‘lim) |
+| Ads policy / Data safety | Play versiyasida reklama yo‘q. Qaytarilsa: Ads, Data safety, trader status birga (0-bo‘lim) |
 | Device and Network Abuse (o‘zini yangilash) | Play versiyasi yangilanishni faqat Play orqali ko‘rsatadi (`Online.kt`: `fromPlay` → Play havolasi). Saytdan APK yuklashni taklif qilmang |
 | Data safety mos emas | 3-bo‘limdagi jadvalni SDK’lar bilan solishtiring |
-| 16 KB page size | CI’dagi 16 KB tekshiruvi qizil bo‘lsa, Yandex SDK’ni yangilang |
+| 16 KB page size | CI’dagi 16 KB tekshiruvi qizil bo‘lsa, native kutubxonali SDK’ni (saytdagi APK’da Yandex) yangilang |
 | Metadata / screenshots | Faqat ilovaning o‘zidan olingan skrinshotlar |
 | Families / bolalar | Target audience’da 13 yoshdan kichiklarni belgilamang |

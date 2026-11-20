@@ -8,7 +8,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
-/** The website APK has no accessibility service at all (Google Play Protect blocks those). */
+/**
+ * Neither build has an accessibility service: the website APK never had one (Google Play Protect
+ * blocks those) and the Google Play build dropped it for review (see [Words]).
+ */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class WordsBuildTest {
