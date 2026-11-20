@@ -5,11 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- "Skrinshotlar buferda" (asked only when switched on): the keyboard sees new screenshots -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    <!-- The photos permission ("Skrinshotlar buferda") and the ad SDK: src/direct only. -->
 
     <application
         android:allowBackup="true"
@@ -106,15 +102,5 @@
             android:authorities="${applicationId}.results"
             android:exported="false"
             android:grantUriPermissions="true" />
-
-        <!-- Ads start only when the page asks for a banner (BannerAds), not at app launch. -->
-        <provider
-            android:name="com.yandex.mobile.ads.core.initializer.YandexAdsInitializeProvider"
-            android:authorities="${applicationId}.YandexAdsInitializeProvider"
-            tools:node="remove" />
-        <provider
-            android:name="io.appmetrica.analytics.internal.PreloadInfoContentProvider"
-            android:authorities="${applicationId}.appmetrica.preloadinfo.retail"
-            tools:node="remove" />
     </application>
 </manifest>

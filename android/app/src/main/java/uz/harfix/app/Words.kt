@@ -10,10 +10,12 @@ import android.view.accessibility.AccessibilityManager
  * "Odatiy klaviaturada" (on any keyboard, e.g. Gboard): oʻ gʻ sh ch become ö ğ ş ç while
  * typing, through an accessibility service, with a Quick Settings tile to turn it on/off.
  *
- * Only the "play" flavor has it: WordsService and WordsTile live in src/play and are declared
- * in src/play/AndroidManifest.xml. The website APK ("direct") ships without them so Google Play
- * Protect does not block it; this object names them by class name, so the direct build has no
- * accessibility code at all, and the screens show "not available" there.
+ * No build ships it now. The website APK ("direct") never had it, so Google Play Protect does not
+ * block it; the Google Play build dropped it on 2026-11-20 so its first review needs no
+ * Accessibility API declaration (android/PLAY.md). WordsService and WordsTile lived in src/play
+ * (with their declarations in src/play/AndroidManifest.xml); to bring them back, restore those
+ * files from git. This object names them by class name, so without them there is no
+ * accessibility code at all, and the screens show "not available".
  */
 object Words {
     /** Password, visible password, web password / URI, e-mail, web e-mail fields are never touched. */

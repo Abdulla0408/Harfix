@@ -214,6 +214,7 @@ class MainActivity : Activity() {
 
     /** "Skrinshotlar buferda": the keyboard needs the photos permission to see new screenshots. */
     fun askShots() {
+        if (!ClipImages.shotsSupported(this)) return // the Google Play build has no photos permission
         @Suppress("DEPRECATION")
         getSharedPreferences("harfix", Context.MODE_MULTI_PROCESS).edit().putBoolean("shots", true).apply()
         if (checkSelfPermission(ClipImages.PERMISSION) == PackageManager.PERMISSION_GRANTED) {

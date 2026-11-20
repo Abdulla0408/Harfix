@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Website APK only. The Google Play build has no photos permission and no ad SDK, so its
+     review needs no Photo permissions declaration and the listing says "no ads". -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- "Skrinshotlar buferda" (asked only when switched on): the keyboard sees new screenshots -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <application>
+        <!-- Ads start only when the page asks for a banner (BannerAds), not at app launch. -->
+        <provider
+            android:name="com.yandex.mobile.ads.core.initializer.YandexAdsInitializeProvider"
+            android:authorities="${applicationId}.YandexAdsInitializeProvider"
+            tools:node="remove" />
+        <provider
+            android:name="io.appmetrica.analytics.internal.PreloadInfoContentProvider"
+            android:authorities="${applicationId}.appmetrica.preloadinfo.retail"
+            tools:node="remove" />
+    </application>
+</manifest>

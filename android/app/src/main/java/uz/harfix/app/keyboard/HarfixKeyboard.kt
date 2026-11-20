@@ -561,6 +561,9 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
 
     private fun shotsOn() = prefs().getBoolean("shots", true) && ClipImages.canReadShots(this)
 
+    /** The Google Play build has no photos permission, so the panel does not offer screenshots. */
+    private val shotsSupported by lazy { ClipImages.shotsSupported(this) }
+
     /** Starts or stops watching the gallery for new screenshots. */
     private fun watchShots() {
         val on = shotsOn()
@@ -629,7 +632,7 @@ class HarfixKeyboard : InputMethodService(), KeyboardListener {
     private fun showClipboard() {
         rememberClip()
         images = ClipImages.list(this)
-        show(Layouts.clipboard(clips, images.size, !shotsOn()))
+        show(Layouts.clipboard(clips, images.size, !shotsOn() && shotsSupported))
         val files = images.take(Layouts.CLIP_IMAGES)
         val push = {
             view?.setThumbs(files.mapIndexedNotNull { i, f -> thumbs[f.name]?.let { "img:$i" to it } }.toMap())

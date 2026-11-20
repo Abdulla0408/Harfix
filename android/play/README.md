@@ -43,11 +43,12 @@ Formalar (Data safety, Content rating, deklaratsiyalar) javoblari [../PLAY.md](.
 Har bir bandga javoblar [../PLAY.md](../PLAY.md), 3-bo‘limda:
 1. **Privacy policy**: `https://harfix.uz/maxfiylik/`.
 2. **App access**: hamma narsa akkauntsiz ishlaydi.
-3. **Ads**: Yandex reklamasi yoqiladigan bo‘lsa — *Yes*. Hozir o‘chiq, lekin SDK ilovada bor.
+3. **Ads**: *No*. Play versiyasida reklama SDK’si yo‘q. Keyin reklama qo‘shilsa, yangilanish bilan
+   birga *Yes* ga o‘zgartiramiz (PLAY.md, 0-bo‘lim).
 4. **Content rating**: IARC so‘rovnomasi. Kategoriya *Utility/Productivity*, savollarga *No*.
 5. **Target audience**: 13+ (13 yoshdan kichiklarni belgilamang).
-6. **Data safety**: PLAY.md dagi jadval. Rasmlar (skrinshotlar) faqat telefonda ishlanadi, shuning uchun
-   «yig‘iladi» deb belgilanmaydi.
+6. **Data safety**: PLAY.md dagi jadval. Faqat anonim o‘rnatish raqami (statistika) yig‘iladi, hech kimga
+   berilmaydi. Rasmlar faqat telefonda ishlanadi, shuning uchun «yig‘iladi» deb belgilanmaydi.
 7. **Government apps, Financial features, Health, News**: hammasiga *No*.
 8. **Store listing**: [listing.md](listing.md) va `images/`.
 
@@ -62,15 +63,10 @@ Har bir bandga javoblar [../PLAY.md](../PLAY.md), 3-bo‘limda:
      *upload key* bo‘ladi.
    - `Harfix-play.aab` ni yuklang.
    - *Release notes*: [listing.md](listing.md) dagi matn.
-5. Yuklagach, Play ikkita ruxsat uchun **deklaratsiya** so‘raydi (*App content → Sensitive permissions and APIs*).
-   Matnlari PLAY.md da:
-   - **Accessibility API** («Odatiy klaviaturada»): matn va **video** (30–60 soniya, ssenariy PLAY.md, 4-bo‘lim).
-     Videoni telefonning ekran yozuvi bilan olib, YouTube’ga *Unlisted* qilib yuklang.
-   - **Photo and video permissions** (skrinshotlar buferda): matn.
+5. Play versiyasida rasmlar ruxsati, reklama va accessibility xizmati yo‘q, shuning uchun qo‘shimcha
+   **deklaratsiya va video kerak emas**. *App content* da biror band «Action required» bo‘lib qolsa, PLAY.md
+   dagi javoblar bilan to‘ldiring.
 6. **Send for review**. Birinchi tekshiruv bir necha kundan bir haftagacha davom etadi.
-
-> Google «Odatiy klaviaturada» ni rad etsa, xizmatsiz AAB yuboriladi. Uni men tayyorlab beraman:
-> `play` flavor’idan xizmatni olib tashlash va qayta yig‘ish kifoya.
 
 ## 5. 14 kun
 
