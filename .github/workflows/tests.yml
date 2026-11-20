@@ -12,3 +12,4 @@ jobs:
         working-directory: bot
       - run: python core/tests/test_converter.py
       - run: python bot/tests/test_documents.py
+      - run: python desktop/tests/test_typist.py
